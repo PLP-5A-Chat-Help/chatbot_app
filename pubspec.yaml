@@ -1,0 +1,31 @@
+name: chatbot_app
+description: "Application Client pour effectuer des requêtes auprès de notre chatbot dans le cadre d'un projet de quatrième année."
+
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.7.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  auto_size_text: ^3.0.0
+  window_size: ^0.1.0
+  file_picker: ^10.1.9
+  path: ^1.9.1
+  http: ^1.4.0
+
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/
+    - assets/certs/
