@@ -3,11 +3,13 @@ import 'dart:core';
 
 class Conversation {
 
-  int id;
+  String id;
+  String title;
   List<List<String>> messages;
 
   Conversation({
     required this.id,
+    required this.title,
     required this.messages,
   });
 

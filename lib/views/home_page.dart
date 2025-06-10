@@ -3,10 +3,7 @@ import 'dart:io';
 
 import 'package:chatbot_app/views/discussion_page.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
-
-import '../model/user.dart';
 import '../variables.dart';
 
 class HomePage extends StatefulWidget {
@@ -50,14 +47,14 @@ class _HomePageState extends State<HomePage> {
         user.setAccessToken(data['access_token']);
         user.setTokenType(data['token_type']);
 
-        print("Connexion réussie: ${user.getAccessToken()}");
+        print("Connexion réussie: ${user.getAccessToken()}"); //todo
 
         usernameController.clear();
         passwordController.clear();
 
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (context) => const DiscussionPage.empty()),
+          MaterialPageRoute(builder: (context) => DiscussionPage.empty()),
         );
       } else {
         print("Erreur lors de la connexion : ${response.statusCode}");
@@ -86,7 +83,7 @@ class _HomePageState extends State<HomePage> {
       final response = await request.close();
 
       if (response.statusCode == 200) {
-        print("Inscription réussie");
+        print("Inscription réussie"); // todo
         connexion(); // Appelle la version corrigée de connexion avec le context
       } else {
         print("Erreur lors de l'inscription : ${response.statusCode}");

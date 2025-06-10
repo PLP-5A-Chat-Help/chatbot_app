@@ -5,18 +5,21 @@ import 'package:auto_size_text/auto_size_text.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 
 import 'package:path/path.dart' as p;
+import 'package:http/http.dart' as http;
 
 import '../model/conversation_subject.dart';
+import '../model/conversation.dart';
 import '../variables.dart';
 
 class DiscussionPage extends StatefulWidget {
-  const DiscussionPage({super.key, required this.titre, required this.listeMessages});
-  const DiscussionPage.empty({super.key}) : titre = "", listeMessages = const [];
+  DiscussionPage({super.key, required this.titre, required this.conversation});
+  DiscussionPage.empty({super.key}) : titre = "", conversation = null;
 
   final String titre; // Titre de la discussion
-  final List<List<String>> listeMessages; // Map des messages de la discussion associés à qui les envoie
+  Conversation? conversation;
 
   @override
   State<DiscussionPage> createState() => _DiscussionPageState();
@@ -25,9 +28,10 @@ class DiscussionPage extends StatefulWidget {
 class _DiscussionPageState extends State<DiscussionPage> {
   GlobalKey<ScaffoldState> scaffoldKey = GlobalKey<ScaffoldState>();
   TextEditingController inputController = TextEditingController();
-  List<ConversationSubject> listeSujets = [];
+  //List<ConversationSubject> listeSujets = [];
   bool researchMode = false; // true = recherche web, false = recherche locale
   List<File> files = []; // Liste des fichiers sélectionnés
+  bool isLoading = false;
 
   late final ScrollController _scrollController;
 
@@ -40,35 +44,109 @@ class _DiscussionPageState extends State<DiscussionPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrollToBottom();
     });
+
+    if (widget.conversation != null) {
+      launchConversation();
+    }
   }
 
-
   void _scrollToBottom() {
-    if(_scrollController.hasClients) {
+    if (_scrollController.hasClients) {
       SchedulerBinding.instance.addPostFrameCallback((_) {
-        _scrollController.jumpTo(
-          _scrollController.position.maxScrollExtent,
-        );
+        _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
       });
     }
   }
 
+  void removeDiscussion(String id) async {
+    final uri = Uri.parse('$urlPrefix/delete_conversation/$id');
 
+    final request = http.MultipartRequest('POST', uri)..headers['Authorization'] = 'Bearer ${user.accessToken}';
 
-  void logout() {
+    try {
+      final response = await request.send();
+
+      if (response.statusCode == 200) {
+        print("Sa suppression réussie");
+
+        loadSubjects().then((sujets) {
+          if (id == widget.conversation?.id) {
+            Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => DiscussionPage(titre: "", conversation: null)));
+          } else {
+            setState(() {});
+          }
+        });
+      } else {
+        print("Erreur lors de la suppression de la conversation : ${response.statusCode}");
+      }
+    } catch (e) {
+      print("Exception pendant la récupération : $e");
+    }
+  }
+
+  void launchConversation() async {
+    widget.conversation = Conversation(id: widget.conversation!.id, title: widget.titre, messages: []);
+
+    final uri = Uri.parse('$urlPrefix/chat/${widget.conversation!.id}');
+
+    final request = http.MultipartRequest('GET', uri)..headers['Authorization'] = 'Bearer ${user.accessToken}';
+
+    try {
+      final response = await request.send();
+
+      if (response.statusCode == 200) {
+        print("Réception de la conversation réussie");
+
+        final responseBody = await response.stream.bytesToString();
+        final json = jsonDecode(responseBody);
+
+        List<List<String>> messages = [];
+
+        //print(json.toString());
+
+        for (var item in json) {
+          final role = item["role"].toString();
+          final message = item["content"].toString();
+          messages.add([role, message]);
+        }
+
+        // Ajouter ces messages à la conversation
+        widget.conversation?.messages.addAll(messages);
+
+        print("Messages reçus : ${messages.length}");
+
+        setState(() {});
+        _scrollToBottom();
+      } else {
+        print("Erreur lors de la récupération de la conversation : ${response.statusCode}");
+      }
+    } catch (e) {
+      print("Exception pendant la récupération : $e");
+    }
+  }
+
+  void logout() async {
+    final uri = Uri.parse('$urlPrefix/logout');
+    final request = http.MultipartRequest('POST', uri)..headers['Authorization'] = 'Bearer ${user.accessToken}';
+    try {
+      final response = await request.send();
+      if (response.statusCode == 200) {
+        print("Déconnexion réussie");
+      } else {
+        print("Erreur lors de la déconnexion : ${response.statusCode}");
+      }
+    } catch (e) {
+      print("Exception pendant la récupération : $e");
+    }
+    // Réinitialiser l'utilisateur
     user.clear();
     Navigator.pop(context);
   }
 
-  void openMenu() async {
-
-    // final client = await createSecureHttpClient();
-    final client = HttpClient()
-      ..badCertificateCallback = (cert, host, port) => true;
+  Future<List<ConversationSubject>> loadSubjects() async {
+    final client = HttpClient()..badCertificateCallback = (cert, host, port) => true;
 
     final url = Uri.parse('$urlPrefix/conversations');
-    final body = {
-    };
 
     try {
       final request = await client.getUrl(url);
@@ -76,19 +154,21 @@ class _DiscussionPageState extends State<DiscussionPage> {
       // Ajout du token d'authentification
       request.headers.set(HttpHeaders.authorizationHeader, "Bearer ${user.accessToken}");
 
-
       final response = await request.close();
 
       if (response.statusCode == 200) {
-
         print("Récupération des sujets réussie");
 
         final responseBody = await response.transform(utf8.decoder).join();
         final List<dynamic> data = jsonDecode(responseBody);
 
         List<ConversationSubject> listeSujets = data.map((json) => ConversationSubject.fromJson(json)).toList();
-        this.listeSujets = listeSujets;
 
+        listeSujets.sort(
+          (a, b) => b.lastUpdate.compareTo(a.lastUpdate), // Tri par date de dernière mise à jour, du plus récent au plus ancien
+        );
+
+        return listeSujets;
       } else {
         print("Erreur lors de la récupération des sujets : ${response.statusCode}");
       }
@@ -96,20 +176,137 @@ class _DiscussionPageState extends State<DiscussionPage> {
       print("Exception pendant la récupération : $e");
     }
 
-    scaffoldKey.currentState?.openDrawer();
+    return [];
+  }
 
+  void openMenu() {
+    scaffoldKey.currentState?.openDrawer();
   }
 
   void closeMenu() {
     scaffoldKey.currentState?.closeDrawer();
   }
 
-  void send() {
-    // TODO
+  void send() async {
+    setState(() {
+      if (widget.conversation == null) {
+        // Si la conversation est nulle, on crée une nouvelle conversation
+        widget.conversation = Conversation(
+          id: "-1",
+          title: "",
+          messages: [
+            ["user", inputController.text],
+          ],
+        );
+      } else {
+        widget.conversation?.addMessage("user", inputController.text);
+      }
+      isLoading = true;
+      widget.conversation?.messages.add(["system", "loading"]); // message temporaire
+    });
+    _scrollToBottom();
+
+    final uri = Uri.parse('$urlPrefix/send');
+
+    final request =
+        http.MultipartRequest('POST', uri)
+          ..fields['content'] = inputController.text
+          ..fields['use_web'] = researchMode.toString()
+          ..fields['conversation_id'] = (widget.conversation?.id).toString()
+          ..headers['Authorization'] = 'Bearer ${user.accessToken}';
+
+    for (var file in files) {
+      print(file.path);
+
+      final fileStream = http.ByteStream(file.openRead());
+      final fileLength = await file.length();
+
+      final multipartFile = http.MultipartFile('files', fileStream, fileLength, filename: p.basename(file.path));
+
+      request.files.add(multipartFile);
+    }
+
+    // Reset le champ de saisie et la liste des fichiers
     inputController.clear();
+    if (files.isNotEmpty) {
+      files.clear();
+    }
+
+    try {
+      final response = await request.send();
+
+      if (response.statusCode == 200) {
+        print("Envoi de message réussi");
+
+        final responseBody = await response.stream.bytesToString();
+        final json = jsonDecode(responseBody);
+
+        final String conversationId = json['conversation_id'].toString();
+        final String responseText = json['response'].toString();
+        final String title = json['title'].toString();
+
+        if (widget.conversation?.id == "-1") {
+          // Si la conversation est nouvelle, on lui donne un ID reçu
+          widget.conversation?.id = conversationId;
+        }
+
+        setState(() {
+          isLoading = false;
+          // Remplace le "loading" par la vraie réponse
+          final lastIndex = widget.conversation!.messages.lastIndexWhere((msg) => msg[0] == "system" && msg[1] == "loading");
+          if (lastIndex != -1) {
+            widget.conversation!.messages[lastIndex] = ["assistant", responseText];
+            if (widget.conversation?.title == "") {
+              // Si le titre de la conversation est vide, on le met à jour
+              widget.conversation?.title = title;
+            }
+          }
+        });
+        _scrollToBottom();
+      } else {
+        print("Erreur lors de la récupération des messages : ${response.statusCode}");
+        setState(() {
+          isLoading = false;
+          // Remplace le "loading" par un message d'erreur
+          final lastIndex = widget.conversation!.messages.lastIndexWhere((msg) => msg[0] == "system" && msg[1] == "loading");
+          if (lastIndex != -1) {
+            widget.conversation!.messages[lastIndex] = ["assistant", "Erreur lors de la récupération des messages"];
+          }
+        });
+      }
+    } catch (e) {
+      print("Exception pendant la récupération : $e");
+      setState(() {
+        isLoading = false;
+        // Remplace le "loading" par un message d'erreur
+        final lastIndex = widget.conversation!.messages.lastIndexWhere((msg) => msg[0] == "system" && msg[1] == "loading");
+        if (lastIndex != -1) {
+          widget.conversation!.messages[lastIndex] = ["assistant", "Erreur lors de la récupération des messages"];
+        }
+      });
+    }
   }
 
   void switchResearchMode() {
+
+    if(researchMode && files.isNotEmpty) {
+      // Si on est en mode recherche web et qu'il y a des fichiers, on affiche un message d'avertissement
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: AutoSizeText(
+            "Veuillez supprimer les fichiers avant de changer le mode de recherche.",
+            style: const TextStyle(color: Colors.white, fontSize: 20),
+            maxLines: 1,
+            maxFontSize: 20,
+            minFontSize: 8,
+          ),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
     setState(() {
       researchMode = !researchMode;
     });
@@ -143,28 +340,34 @@ class _DiscussionPageState extends State<DiscussionPage> {
   }
 
   Future<void> selectFiles() async {
-    FilePickerResult? result = await FilePicker.platform.pickFiles(
-        allowMultiple: true,
-        type: FileType.custom,
-        allowedExtensions: ['txt', 'pdf', 'markdown', 'md']
-    );
+    FilePickerResult? result = await FilePicker.platform.pickFiles(allowMultiple: true, type: FileType.custom, allowedExtensions: ['txt', 'pdf', 'markdown', 'md']);
 
     if (result != null) {
       List<File> selectedFiles = result.paths.map((path) => File(path!)).toList();
 
       for (File f in selectedFiles) {
-
-        if( files.length >= 4 || files.any((file) => file.path == f.path)) {
+        if (files.length >= 4 || files.any((file) => file.path == f.path)) {
           // Si le fichier est déjà dans la liste ou qu'on a déjà 4 fichiers, on ne l'ajoute pas
           continue;
-        }
-        else {
+        } else {
           files.add(f);
         }
       }
+
+      // Si on est en mode recherche web, on affiche un message d'avertissement
+      if (researchMode) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text("Désactivation du mode de recherche web pour pouvoir envoyer des fichiers."),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+        researchMode = false;
+      }
     }
 
-    setState(() { });
+    setState(() {});
   }
 
   @override
@@ -189,7 +392,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
               // Bouton pour créer une nouvelle discussion
               RawMaterialButton(
                 onPressed: () {
-                  Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const DiscussionPage.empty()));
+                  Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => DiscussionPage.empty()));
                 },
 
                 child: Container(
@@ -210,53 +413,61 @@ class _DiscussionPageState extends State<DiscussionPage> {
                 ),
               ),
 
-              // Liste des discussions
+              // Liste des sujets des discussions
               SizedBox(
                 height: MediaQuery.of(context).size.height - 200,
-                child: ListView.builder(
-                  itemCount: listeSujets.length, // TODO : Remplacer par le nombre de discussions
-                  itemBuilder: (context, index) {
-                    return Padding(
-                      padding: const EdgeInsets.only(top: 10),
-                      child: RawMaterialButton(
-                        onPressed: () {
-                          // TODO : Ouvrir la discussion
-                          Navigator.pushReplacement(
-                            context,
-                            MaterialPageRoute(
-                              builder:
-                                  (context) => DiscussionPage(
-                                    titre: listeSujets[index].id,
-                                    listeMessages: [],
-                                  ),
-                            ),
-                          );
-                        },
+                child: FutureBuilder<List<ConversationSubject>>(
+                  future: loadSubjects(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    } else if (snapshot.hasError) {
+                      return Center(child: Text("Erreur : ${snapshot.error}", style: TextStyle(color: Colors.white, fontSize: 20)));
+                    } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                      return const Center(child: Text("Aucun sujet trouvé.", style: TextStyle(color: Colors.white, fontSize: 20)));
+                    }
 
-                        child: Container(
-                          width: 300,
-                          height: 50,
-                          decoration: BoxDecoration(color: const Color.fromRGBO(103, 103, 103, 1)),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.start,
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              const SizedBox(width: 10),
-                              SizedBox(width: 230, child: AutoSizeText(listeSujets[index].titre, style: TextStyle(color: Colors.white, fontSize: 20), maxLines: 1, maxFontSize: 20, minFontSize: 8)),
-                              const Expanded(child: SizedBox()),
-                              IconButton(
-                                onPressed: () {
-                                  listeSujets.removeAt(index);
-                                  setState(() {});
-                                  // TODO : Supprimer la discussion
-                                },
-                                icon: const Icon(Icons.delete, color: Colors.white, size: 32),
+                    final sujets = snapshot.data!;
+
+                    return ListView.builder(
+                      itemCount: sujets.length,
+                      itemBuilder: (context, index) {
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 10),
+                          child: RawMaterialButton(
+                            onPressed: () {
+                              Navigator.pushReplacement(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => DiscussionPage(titre: sujets[index].titre, conversation: Conversation(id: sujets[index].id, title: sujets[index].titre, messages: [])),
+                                ),
+                              );
+                            },
+                            child: Container(
+                              width: 300,
+                              height: 50,
+                              decoration: BoxDecoration(color: const Color.fromRGBO(103, 103, 103, 1)),
+                              child: Row(
+                                children: [
+                                  const SizedBox(width: 10),
+                                  SizedBox(
+                                    width: 230,
+                                    child: AutoSizeText(sujets[index].titre, style: const TextStyle(color: Colors.white, fontSize: 20), maxLines: 1, maxFontSize: 20, minFontSize: 8),
+                                  ),
+                                  const Expanded(child: SizedBox()),
+                                  IconButton(
+                                    onPressed: () {
+                                      removeDiscussion(sujets[index].id);
+                                    },
+                                    icon: const Icon(Icons.delete, color: Colors.white, size: 32),
+                                  ),
+                                  const SizedBox(width: 10),
+                                ],
                               ),
-                              const SizedBox(width: 10),
-                            ],
+                            ),
                           ),
-                        ),
-                      ),
+                        );
+                      },
                     );
                   },
                 ),
@@ -283,7 +494,15 @@ class _DiscussionPageState extends State<DiscussionPage> {
               SizedBox(
                 width: MediaQuery.of(context).size.width - 150,
                 height: 50,
-                child: Center(child: AutoSizeText(widget.titre, maxLines: 1, maxFontSize: 40, minFontSize: 8, style: const TextStyle(color: Colors.white, fontSize: 40))),
+                child: Center(
+                  child: AutoSizeText(
+                    widget.conversation == null ? "" : widget.conversation!.title,
+                    maxLines: 1,
+                    maxFontSize: 40,
+                    minFontSize: 8,
+                    style: const TextStyle(color: Colors.white, fontSize: 40),
+                  ),
+                ),
               ),
 
               const Expanded(child: SizedBox()),
@@ -293,9 +512,9 @@ class _DiscussionPageState extends State<DiscussionPage> {
           ),
 
           // Contenu de la discussion
-          if (widget.listeMessages.isEmpty) const Expanded(child: SizedBox()),
+          if (widget.conversation == null) const Expanded(child: SizedBox()),
 
-          if (widget.listeMessages.isEmpty)
+          if (widget.conversation == null)
             const Center(child: Text("Comment puis-je vous aider ?", style: TextStyle(color: Colors.white, fontSize: 32), textAlign: TextAlign.center))
           else // Liste des messages
             Expanded(
@@ -303,21 +522,54 @@ class _DiscussionPageState extends State<DiscussionPage> {
                 width: MediaQuery.of(context).size.width,
                 child: ListView.builder(
                   controller: _scrollController,
-                  itemCount: widget.listeMessages.length,
+                  itemCount: widget.conversation?.messages.length,
                   itemBuilder: (context, index) {
-                    final isUser = widget.listeMessages[index][0] == "user";
-                    final message = widget.listeMessages[index][1];
+                    if (widget.conversation?.messages[index][0] == "file") {
+                      return SizedBox.shrink();
+                    }
+
+                    final isUser = widget.conversation?.messages[index][0] == "user";
+                    final message = widget.conversation?.messages[index][1];
+                    final isLoadingMessage = message == "loading";
 
                     return Align(
                       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
                       child: Container(
                         margin: const EdgeInsets.symmetric(vertical: 5, horizontal: 10),
                         padding: const EdgeInsets.all(10),
-                        constraints: BoxConstraints(
-                          maxWidth: MediaQuery.of(context).size.width * 0.7, // largeur max
-                        ),
+                        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.7),
                         decoration: BoxDecoration(color: const Color.fromRGBO(85, 85, 85, 1), borderRadius: BorderRadius.circular(15)),
-                        child: SelectableText(message, style: const TextStyle(color: Colors.white, fontSize: 14)),
+                        child:
+                            isLoadingMessage
+                                ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                : MarkdownBody(
+                                  data: message!,
+                                  selectable: true,
+                                  styleSheet: MarkdownStyleSheet(
+                                      p: const TextStyle(color: Colors.white, fontSize: 14),
+                                      code: const TextStyle(color: Colors.white, fontSize: 14),
+                                      blockquote: const TextStyle(color: Colors.white, fontSize: 14, fontStyle: FontStyle.italic),
+                                      h1: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+                                      h2: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+                                      h3: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                                      h4: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                                      h5: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                                      h6: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                                      a: const TextStyle(color: Colors.blue, fontSize: 14, decoration: TextDecoration.underline),
+                                      strong: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                                      em: const TextStyle(color: Colors.white, fontSize: 14, fontStyle: FontStyle.italic),
+                                      del: const TextStyle(color: Colors.white, fontSize: 14, decoration: TextDecoration.lineThrough),
+                                      blockquoteDecoration: BoxDecoration(
+                                        color: Colors.black54,
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      codeblockDecoration: BoxDecoration(
+                                        color: Colors.black54,
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      listBullet: const TextStyle(color: Colors.white, fontSize: 14),
+                                  ),
+                                ),
                       ),
                     );
                   },
@@ -325,7 +577,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
               ),
             ),
 
-          if (widget.listeMessages.isEmpty) const Expanded(child: SizedBox()),
+          if (widget.conversation == null) const Expanded(child: SizedBox()),
           const SizedBox(height: 5),
 
           // Barre de saisie
@@ -359,55 +611,44 @@ class _DiscussionPageState extends State<DiscussionPage> {
             ),
           ),
 
-          files.isEmpty ?
-            const SizedBox(height: 50) :
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: SizedBox(
-              height: 50,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: files.length,
-                itemBuilder: (context, index) {
-                  return Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 5),
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
-                    decoration: BoxDecoration(
-                      color: const Color.fromRGBO(85, 85, 85, 1),
-                      borderRadius: BorderRadius.circular(15),
-                    ),
-                    child: SizedBox(
-                      width: 200,
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          Expanded(
-                            child: Text(
-                              p.basename(files[index].path),
-                              style: const TextStyle(color: Colors.white, fontSize: 14),
-                              overflow: TextOverflow.ellipsis,
-                            ),
+          files.isEmpty
+              ? const SizedBox(height: 50)
+              : Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: SizedBox(
+                  height: 50,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: files.length,
+                    itemBuilder: (context, index) {
+                      return Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 5),
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        decoration: BoxDecoration(color: const Color.fromRGBO(85, 85, 85, 1), borderRadius: BorderRadius.circular(15)),
+                        child: SizedBox(
+                          width: 200,
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Expanded(child: Text(p.basename(files[index].path), style: const TextStyle(color: Colors.white, fontSize: 14), overflow: TextOverflow.ellipsis)),
+                              IconButton(
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                                onPressed: () {
+                                  setState(() {
+                                    files.removeAt(index);
+                                  });
+                                },
+                                icon: const Icon(Icons.close, color: Colors.white, size: 20),
+                              ),
+                            ],
                           ),
-                          IconButton(
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
-                            onPressed: () {
-                              setState(() {
-                                files.removeAt(index);
-                              });
-                            },
-                            icon: const Icon(Icons.close, color: Colors.white, size: 20),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
+                        ),
+                      );
+                    },
+                  ),
+                ),
               ),
-            ),
-          )
-
-
         ],
       ),
     );

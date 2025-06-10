@@ -12,9 +12,9 @@ class ConversationSubject {
 
   factory ConversationSubject.fromJson(Map<String, dynamic> json) {
     return ConversationSubject(
-      id: json['id'],
+      id: json['id'].toString(),
       titre: json['title'],
-      lastUpdate: json['last_update'],
+      lastUpdate: DateTime.parse(json['last_update'])
     );
   }
 
