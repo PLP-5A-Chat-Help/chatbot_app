@@ -5,6 +5,7 @@ import 'package:auto_size_text/auto_size_text.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 
 import 'package:path/path.dart' as p;
@@ -28,10 +29,10 @@ class DiscussionPage extends StatefulWidget {
 class _DiscussionPageState extends State<DiscussionPage> {
   GlobalKey<ScaffoldState> scaffoldKey = GlobalKey<ScaffoldState>();
   TextEditingController inputController = TextEditingController();
-  //List<ConversationSubject> listeSujets = [];
   bool researchMode = false; // true = recherche web, false = recherche locale
   List<File> files = []; // Liste des fichiers sélectionnés
   bool isLoading = false;
+  Future<List<ConversationSubject>>? drawerData;
 
   late final ScrollController _scrollController;
 
@@ -58,6 +59,14 @@ class _DiscussionPageState extends State<DiscussionPage> {
     }
   }
 
+  Future<HttpClient> createSecureHttpClient() async {
+    final context = SecurityContext.defaultContext;
+    final ByteData certData = await rootBundle.load('assets/certs/myCA.pem');
+    context.setTrustedCertificatesBytes(certData.buffer.asUint8List());
+    return HttpClient(context: context);
+  }
+
+
   void removeDiscussion(String id) async {
     final uri = Uri.parse('$urlPrefix/delete_conversation/$id');
 
@@ -67,12 +76,14 @@ class _DiscussionPageState extends State<DiscussionPage> {
       final response = await request.send();
 
       if (response.statusCode == 200) {
-        print("Sa suppression réussie");
+        print("La suppression a réussie");
 
         loadSubjects().then((sujets) {
+          drawerData = Future.value(sujets);
           if (id == widget.conversation?.id) {
             Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => DiscussionPage(titre: "", conversation: null)));
           } else {
+            print("chargement des nouveaux sujets");
             setState(() {});
           }
         });
@@ -102,8 +113,6 @@ class _DiscussionPageState extends State<DiscussionPage> {
 
         List<List<String>> messages = [];
 
-        //print(json.toString());
-
         for (var item in json) {
           final role = item["role"].toString();
           final message = item["content"].toString();
@@ -112,8 +121,6 @@ class _DiscussionPageState extends State<DiscussionPage> {
 
         // Ajouter ces messages à la conversation
         widget.conversation?.messages.addAll(messages);
-
-        print("Messages reçus : ${messages.length}");
 
         setState(() {});
         _scrollToBottom();
@@ -140,11 +147,12 @@ class _DiscussionPageState extends State<DiscussionPage> {
     }
     // Réinitialiser l'utilisateur
     user.clear();
-    Navigator.pop(context);
+    // Retourner à la page de connexion
+    Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
   Future<List<ConversationSubject>> loadSubjects() async {
-    final client = HttpClient()..badCertificateCallback = (cert, host, port) => true;
+    final client = await createSecureHttpClient();
 
     final url = Uri.parse('$urlPrefix/conversations');
 
@@ -171,12 +179,19 @@ class _DiscussionPageState extends State<DiscussionPage> {
         return listeSujets;
       } else {
         print("Erreur lors de la récupération des sujets : ${response.statusCode}");
+        throw Exception("Erreur lors de la récupération des sujets : ${response.statusCode}");
       }
     } catch (e) {
       print("Exception pendant la récupération : $e");
+      throw Exception("Erreur lors de la récupération des sujets.");
     }
+  }
 
-    return [];
+
+  void _onDrawerOpened() {
+    setState(() {
+      drawerData = loadSubjects();
+    });
   }
 
   void openMenu() {
@@ -186,6 +201,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
   void closeMenu() {
     scaffoldKey.currentState?.closeDrawer();
   }
+
 
   void send() async {
     setState(() {
@@ -216,8 +232,6 @@ class _DiscussionPageState extends State<DiscussionPage> {
           ..headers['Authorization'] = 'Bearer ${user.accessToken}';
 
     for (var file in files) {
-      print(file.path);
-
       final fileStream = http.ByteStream(file.openRead());
       final fileLength = await file.length();
 
@@ -241,30 +255,48 @@ class _DiscussionPageState extends State<DiscussionPage> {
         final responseBody = await response.stream.bytesToString();
         final json = jsonDecode(responseBody);
 
-        final String conversationId = json['conversation_id'].toString();
-        final String responseText = json['response'].toString();
-        final String title = json['title'].toString();
 
-        if (widget.conversation?.id == "-1") {
-          // Si la conversation est nouvelle, on lui donne un ID reçu
-          widget.conversation?.id = conversationId;
+        if(context.mounted) {
+          final String conversationId = json['conversation_id'].toString();
+          final String responseText = json['response'].toString();
+          final String title = json['title'].toString();
+
+          if (widget.conversation?.id == "-1") {
+            // Si la conversation est nouvelle, on lui donne un ID reçu
+            widget.conversation?.id = conversationId;
+          }
+
+          setState(() {
+            isLoading = false;
+            // Remplace le "loading" par la vraie réponse
+            final firstIndex = widget.conversation!.messages.indexWhere((msg) => msg[0] == "system" && msg[1] == "loading");
+            if (firstIndex != -1) {
+              widget.conversation!.messages[firstIndex] = ["assistant", responseText];
+              if (widget.conversation?.title == "") {
+                // Si le titre de la conversation est vide, on le met à jour
+                widget.conversation?.title = title;
+              }
+            }
+          });
         }
 
-        setState(() {
-          isLoading = false;
-          // Remplace le "loading" par la vraie réponse
-          final lastIndex = widget.conversation!.messages.lastIndexWhere((msg) => msg[0] == "system" && msg[1] == "loading");
-          if (lastIndex != -1) {
-            widget.conversation!.messages[lastIndex] = ["assistant", responseText];
-            if (widget.conversation?.title == "") {
-              // Si le titre de la conversation est vide, on le met à jour
-              widget.conversation?.title = title;
-            }
-          }
-        });
-        _scrollToBottom();
       } else {
         print("Erreur lors de la récupération des messages : ${response.statusCode}");
+        if(context.mounted) {
+          setState(() {
+            isLoading = false;
+            // Remplace le "loading" par un message d'erreur
+            final firstIndex = widget.conversation!.messages.indexWhere((msg) => msg[0] == "system" && msg[1] == "loading");
+            if (firstIndex != -1) {
+              widget.conversation!.messages[firstIndex] = ["assistant", "Erreur lors de la récupération des messages"];
+            }
+          });
+        }
+
+      }
+    } catch (e) {
+      print("Exception pendant la récupération : $e");
+      if(context.mounted) {
         setState(() {
           isLoading = false;
           // Remplace le "loading" par un message d'erreur
@@ -274,27 +306,18 @@ class _DiscussionPageState extends State<DiscussionPage> {
           }
         });
       }
-    } catch (e) {
-      print("Exception pendant la récupération : $e");
-      setState(() {
-        isLoading = false;
-        // Remplace le "loading" par un message d'erreur
-        final lastIndex = widget.conversation!.messages.lastIndexWhere((msg) => msg[0] == "system" && msg[1] == "loading");
-        if (lastIndex != -1) {
-          widget.conversation!.messages[lastIndex] = ["assistant", "Erreur lors de la récupération des messages"];
-        }
-      });
     }
   }
 
   void switchResearchMode() {
 
-    if(researchMode && files.isNotEmpty) {
+    if(!researchMode && files.isNotEmpty) {
       // Si on est en mode recherche web et qu'il y a des fichiers, on affiche un message d'avertissement
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: AutoSizeText(
-            "Veuillez supprimer les fichiers avant de changer le mode de recherche.",
+            "Veuillez supprimer les fichiers avant d'activer la recherche en ligne.",
             style: const TextStyle(color: Colors.white, fontSize: 20),
             maxLines: 1,
             maxFontSize: 20,
@@ -358,7 +381,13 @@ class _DiscussionPageState extends State<DiscussionPage> {
       if (researchMode) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text("Désactivation du mode de recherche web pour pouvoir envoyer des fichiers."),
+            content: AutoSizeText(
+              "Recherche web désactivée pour pouvoir envoyer des fichiers.",
+              style: const TextStyle(color: Colors.white, fontSize: 20),
+              maxLines: 1,
+              maxFontSize: 20,
+              minFontSize: 8,
+            ),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 2),
           ),
@@ -375,6 +404,10 @@ class _DiscussionPageState extends State<DiscussionPage> {
     return Scaffold(
       key: scaffoldKey,
       backgroundColor: const Color.fromRGBO(59, 59, 63, 1),
+
+      onDrawerChanged: (isOpened) {
+        if (isOpened) _onDrawerOpened();
+      },
 
       // Menu latéral (Drawer)
       drawer: Drawer(
@@ -417,7 +450,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
               SizedBox(
                 height: MediaQuery.of(context).size.height - 200,
                 child: FutureBuilder<List<ConversationSubject>>(
-                  future: loadSubjects(),
+                  future: drawerData,
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
                       return const Center(child: CircularProgressIndicator());
@@ -475,6 +508,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
             ],
           ),
         ),
+
       ),
 
       // Page de discussion
@@ -529,48 +563,62 @@ class _DiscussionPageState extends State<DiscussionPage> {
                     }
 
                     final isUser = widget.conversation?.messages[index][0] == "user";
+                    final isBot = widget.conversation?.messages[index][0] == "assistant";
                     final message = widget.conversation?.messages[index][1];
                     final isLoadingMessage = message == "loading";
 
-                    return Align(
-                      alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-                      child: Container(
-                        margin: const EdgeInsets.symmetric(vertical: 5, horizontal: 10),
-                        padding: const EdgeInsets.all(10),
-                        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.7),
-                        decoration: BoxDecoration(color: const Color.fromRGBO(85, 85, 85, 1), borderRadius: BorderRadius.circular(15)),
-                        child:
-                            isLoadingMessage
-                                ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                                : MarkdownBody(
-                                  data: message!,
-                                  selectable: true,
-                                  styleSheet: MarkdownStyleSheet(
-                                      p: const TextStyle(color: Colors.white, fontSize: 14),
-                                      code: const TextStyle(color: Colors.white, fontSize: 14),
-                                      blockquote: const TextStyle(color: Colors.white, fontSize: 14, fontStyle: FontStyle.italic),
-                                      h1: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
-                                      h2: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
-                                      h3: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
-                                      h4: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-                                      h5: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-                                      h6: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
-                                      a: const TextStyle(color: Colors.blue, fontSize: 14, decoration: TextDecoration.underline),
-                                      strong: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
-                                      em: const TextStyle(color: Colors.white, fontSize: 14, fontStyle: FontStyle.italic),
-                                      del: const TextStyle(color: Colors.white, fontSize: 14, decoration: TextDecoration.lineThrough),
-                                      blockquoteDecoration: BoxDecoration(
-                                        color: Colors.black54,
-                                        borderRadius: BorderRadius.circular(10),
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+
+                        if (isBot) ...[
+                          const SizedBox(width: 8),
+                          Image.asset('assets/images/professeur.png', width: 32),
+                        ],
+
+                        Expanded(
+                          child: Align(
+                            alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+                            child: Container(
+                              margin: const EdgeInsets.symmetric(vertical: 5, horizontal: 10),
+                              padding: const EdgeInsets.all(10),
+                              constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.7),
+                              decoration: BoxDecoration(color: const Color.fromRGBO(85, 85, 85, 1), borderRadius: BorderRadius.circular(15)),
+                              child:
+                                  isLoadingMessage
+                                      ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                      : MarkdownBody(
+                                        data: message!,
+                                        selectable: true,
+                                        styleSheet: MarkdownStyleSheet(
+                                            p: const TextStyle(color: Colors.white, fontSize: 14),
+                                            code: const TextStyle(color: Colors.white, fontSize: 14),
+                                            blockquote: const TextStyle(color: Colors.white, fontSize: 14, fontStyle: FontStyle.italic),
+                                            h1: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+                                            h2: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+                                            h3: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                                            h4: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                                            h5: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                                            h6: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                                            a: const TextStyle(color: Colors.blue, fontSize: 14, decoration: TextDecoration.underline),
+                                            strong: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                                            em: const TextStyle(color: Colors.white, fontSize: 14, fontStyle: FontStyle.italic),
+                                            del: const TextStyle(color: Colors.white, fontSize: 14, decoration: TextDecoration.lineThrough),
+                                            blockquoteDecoration: BoxDecoration(
+                                              color: Colors.black54,
+                                              borderRadius: BorderRadius.circular(10),
+                                            ),
+                                            codeblockDecoration: BoxDecoration(
+                                              color: Colors.black54,
+                                              borderRadius: BorderRadius.circular(10),
+                                            ),
+                                            listBullet: const TextStyle(color: Colors.white, fontSize: 14),
+                                        ),
                                       ),
-                                      codeblockDecoration: BoxDecoration(
-                                        color: Colors.black54,
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                      listBullet: const TextStyle(color: Colors.white, fontSize: 14),
-                                  ),
-                                ),
-                      ),
+                            ),
+                          ),
+                        ),
+                      ],
                     );
                   },
                 ),

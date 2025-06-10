@@ -1,8 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:auto_size_text/auto_size_text.dart';
 import 'package:chatbot_app/views/discussion_page.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../variables.dart';
 
@@ -16,16 +18,23 @@ class _HomePageState extends State<HomePage> {
   TextEditingController usernameController = TextEditingController();
   TextEditingController passwordController = TextEditingController();
 
+  String messageErreur = "";
+
 
   Future<HttpClient> createSecureHttpClient() async {
     final context = SecurityContext.defaultContext;
-    context.setTrustedCertificates('assets/certs/myCA.pem');
+    final ByteData certData = await rootBundle.load('assets/certs/myCA.pem');
+    context.setTrustedCertificatesBytes(certData.buffer.asUint8List());
     return HttpClient(context: context);
   }
 
   void connexion() async {
+
+    setState(() {
+      messageErreur = "";
+    });
+
     final client = await createSecureHttpClient();
-    //final client = HttpClient()..badCertificateCallback = (cert, host, port) => true;
 
     final url = Uri.parse('$urlPrefix/login');
     final body = {
@@ -58,16 +67,26 @@ class _HomePageState extends State<HomePage> {
         );
       } else {
         print("Erreur lors de la connexion : ${response.statusCode}");
+        setState(() {
+          messageErreur = "Erreur lors de la connexion : ${response.statusCode}";
+        });
       }
     } catch (e) {
       print("Exception pendant la connexion : $e");
+      setState(() {
+        messageErreur = "Erreur pendant la connexion.";
+      });
     }
   }
 
-  void inscription() async {
-     final client = await createSecureHttpClient();
-    //final client = HttpClient()..badCertificateCallback = (cert, host, port) => true;
 
+  void inscription() async {
+
+    setState(() {
+      messageErreur = "";
+    });
+
+     final client = await createSecureHttpClient();
 
     final url = Uri.parse('$urlPrefix/register');
     final body = {
@@ -87,9 +106,17 @@ class _HomePageState extends State<HomePage> {
         connexion(); // Appelle la version corrigée de connexion avec le context
       } else {
         print("Erreur lors de l'inscription : ${response.statusCode}");
+        setState(() {
+          messageErreur = "Erreur lors de l'inscription : ${response.statusCode}";
+        });
+
       }
     } catch (e) {
       print("Exception pendant l'inscription : $e");
+
+      setState(() {
+        messageErreur = "Erreur pendant l'inscription.";
+      });
     }
   }
 
@@ -106,7 +133,22 @@ class _HomePageState extends State<HomePage> {
           children: [
             const SizedBox(height: 10),
             Expanded(child: Image.asset("assets/logo.png", width: 320, height: 320)),
-            const SizedBox(height: 20),
+
+            messageErreur.isNotEmpty ?
+              SizedBox(
+                height: 30,
+                child: Padding(
+                  padding: const EdgeInsets.all(2.0),
+                  child: AutoSizeText(
+                    messageErreur,
+                    maxLines: 1,
+                    maxFontSize: 16,
+                    minFontSize: 8,
+                    style: const TextStyle(color: Colors.red),
+                  ),
+                ),
+              )
+            : const SizedBox(height: 30),
 
             Container(
               width: 300,
