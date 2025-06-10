@@ -21,11 +21,8 @@ class _HomePageState extends State<HomePage> {
 
 
   Future<HttpClient> createSecureHttpClient() async {
-    SecurityContext context = SecurityContext(withTrustedRoots: false);
-
-    final certBytes = await rootBundle.load('assets/certs/server.pem');
-    context.setTrustedCertificatesBytes(certBytes.buffer.asUint8List());
-
+    final context = SecurityContext.defaultContext;
+    context.setTrustedCertificates('assets/certs/myCA.pem');
     return HttpClient(context: context);
   }
 
