@@ -55,6 +55,7 @@ class _HomePageState extends State<HomePage> {
 
         user.setAccessToken(data['access_token']);
         user.setTokenType(data['token_type']);
+        user.setUsername(usernameController.text);
 
         print("Connexion réussie: ${user.getAccessToken()}"); //todo
 
@@ -215,22 +216,6 @@ class _HomePageState extends State<HomePage> {
             ),
 
             const SizedBox(height: 50),
-
-            // TODO : Remove ce bouton
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color.fromRGBO(85, 85, 85, 1),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
-                minimumSize: const Size(150, 40),
-              ),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => DiscussionPage.empty()),
-                );
-              },
-              child: const Text("Skip", style: TextStyle(color: Colors.white30, fontSize: 16)),
-            ),
           ],
         ),
       ),

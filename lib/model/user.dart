@@ -21,6 +21,10 @@ class User {
     tokenType = type;
   }
 
+  void setUsername(String name) {
+    username = name;
+  }
+
   void clear() {
     accessToken = '';
     tokenType = '';

@@ -10,6 +10,8 @@ import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 
 import 'package:path/path.dart' as p;
 import 'package:http/http.dart' as http;
+import 'package:speech_to_text/speech_recognition_result.dart';
+import 'package:speech_to_text/speech_to_text.dart';
 
 import '../model/conversation_subject.dart';
 import '../model/conversation.dart';
@@ -22,6 +24,8 @@ class DiscussionPage extends StatefulWidget {
   final String titre; // Titre de la discussion
   Conversation? conversation;
 
+
+
   @override
   State<DiscussionPage> createState() => _DiscussionPageState();
 }
@@ -32,11 +36,17 @@ class _DiscussionPageState extends State<DiscussionPage> {
   bool researchMode = false; // true = recherche web, false = recherche locale
   List<File> files = []; // Liste des fichiers sélectionnés
   bool isLoading = false;
+  bool isListeningMic = false;
   Future<List<ConversationSubject>>? drawerData;
 
   final listeEmotions = ["naturel","amoureux","colère","détective","effrayant","endormi","fatigué","heureux","inquiet","intello","pensif","professeur","soulagé","surpris","triste"];
 
   late final ScrollController _scrollController;
+
+  final SpeechToText _speechToText = SpeechToText();
+  bool _speechEnabled = false;
+  bool _isListening = false;
+  String _currentText = "";
 
   @override
   void initState() {
@@ -51,7 +61,12 @@ class _DiscussionPageState extends State<DiscussionPage> {
     if (widget.conversation != null) {
       launchConversation();
     }
+
+    if(Platform.isAndroid) {
+      _initSpeech();
+    }
   }
+
 
   void _scrollToBottom() {
     if (_scrollController.hasClients) {
@@ -60,6 +75,38 @@ class _DiscussionPageState extends State<DiscussionPage> {
       });
     }
   }
+
+  // ---------------------------------- Speech-to-text ----------------------------------
+
+  Future<void> _initSpeech() async {
+    _speechEnabled = await _speechToText.initialize(
+    );
+    setState(() {});
+  }
+
+  void _startListening() async {
+    await _speechToText.listen(
+      onResult: _onSpeechResult,
+      listenOptions: SpeechListenOptions(
+        partialResults: true,
+        listenMode: ListenMode.dictation,
+      ),
+    );
+    setState(() => _isListening = true);
+  }
+
+  void _stopListening() async {
+    await _speechToText.stop();
+    setState(() => _isListening = false);
+  }
+
+  void _onSpeechResult(SpeechRecognitionResult result) {
+    if (!mounted) return; // Vérifie si le widget est toujours monté
+    //inputController.text = result.recognizedWords;
+    inputController.text = "$_currentText ${result.recognizedWords}";
+  }
+
+  // ---------------------------------- Fonctions pour l'API ----------------------------------
 
   Future<HttpClient> createSecureHttpClient() async {
     final context = SecurityContext.defaultContext;
@@ -262,7 +309,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
           final String conversationId = json['conversation_id'].toString();
           final String responseText = json['response'].toString();
           final String title = json['title'].toString();
-          final String emotion = (json['emotion'] ?? 'naturel').toString();
+          final String emotion = (json['emotion'] ?? 'naturel').toString().replaceAll("#", "");
 
           if (widget.conversation?.id == "-1") {
             // Si la conversation est nouvelle, on lui donne un ID reçu
@@ -372,7 +419,8 @@ class _DiscussionPageState extends State<DiscussionPage> {
       List<File> selectedFiles = result.paths.map((path) => File(path!)).toList();
 
       for (File f in selectedFiles) {
-        if (files.length >= 4 || files.any((file) => file.path == f.path)) {
+
+        if (await f.length() > 10000000 || files.length >= 4 || files.any((file) => file.path == f.path)) {
           // Si le fichier est déjà dans la liste ou qu'on a déjà 4 fichiers, on ne l'ajoute pas
           continue;
         } else {
@@ -728,7 +776,21 @@ class _DiscussionPageState extends State<DiscussionPage> {
                 ),
 
                 if(Platform.isAndroid)
-                  IconButton(onPressed: () {}, icon: const Icon(Icons.mic, color: Colors.black45, size: 30)),
+                  IconButton(onPressed: () {
+                    if(_speechEnabled && !_isListening) {
+                      setState(() {
+                        isListeningMic = true;
+                      });
+                      _currentText = inputController.text; // Sauvegarde le texte actuel
+                      _startListening();
+                    } else if(_speechEnabled && _isListening) {
+                      setState(() {
+                        isListeningMic = false;
+                      });
+                      _stopListening();
+                    }
+
+                  }, icon: Icon(Icons.mic, color: isListeningMic ? Colors.white54 : Colors.black45, size: 30)),
 
                 IconButton(onPressed: send, icon: const Icon(Icons.send_rounded, color: Colors.black45, size: 30)),
               ],
@@ -778,3 +840,13 @@ class _DiscussionPageState extends State<DiscussionPage> {
     );
   }
 }
+
+
+
+
+
+
+
+
+
+
