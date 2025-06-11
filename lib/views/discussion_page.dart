@@ -17,6 +17,14 @@ import '../model/conversation_subject.dart';
 import '../model/conversation.dart';
 import '../variables.dart';
 
+/* ----------------------------------
+  Projet 4A : Chatbot App
+  Date : 11/06/2025
+  discussion_page.dart
+---------------------------------- */
+
+/// Page de discussion
+/// Cette page permet à l'utilisateur de discuter avec le chatbot.
 class DiscussionPage extends StatefulWidget {
   DiscussionPage({super.key, required this.titre, required this.conversation});
   DiscussionPage.empty({super.key}) : titre = "", conversation = null;
@@ -24,30 +32,32 @@ class DiscussionPage extends StatefulWidget {
   final String titre; // Titre de la discussion
   Conversation? conversation;
 
-
-
   @override
   State<DiscussionPage> createState() => _DiscussionPageState();
 }
 
 class _DiscussionPageState extends State<DiscussionPage> {
-  GlobalKey<ScaffoldState> scaffoldKey = GlobalKey<ScaffoldState>();
-  TextEditingController inputController = TextEditingController();
+  // Variables
+  GlobalKey<ScaffoldState> scaffoldKey = GlobalKey<ScaffoldState>(); // Clé pour le Scaffold (utile pour gérer le Drawer)
+  TextEditingController inputController = TextEditingController(); // Contrôleur pour le champ de saisie de texte
+  late final ScrollController _scrollController; // Contrôleur pour le défilement de la liste des messages
   bool researchMode = false; // true = recherche web, false = recherche locale
   List<File> files = []; // Liste des fichiers sélectionnés
-  bool isLoading = false;
-  bool isListeningMic = false;
-  Future<List<ConversationSubject>>? drawerData;
+  bool isLoading = false; // Indique si une requête est en cours (animation)
 
+  Future<List<ConversationSubject>>? drawerData; // Données pour le Drawer (liste des sujets de conversation)
+
+  // Liste des émotions disponibles pour les messages du bot
   final listeEmotions = ["naturel","amoureux","colère","détective","effrayant","endormi","fatigué","heureux","inquiet","intello","pensif","professeur","soulagé","surpris","triste"];
 
-  late final ScrollController _scrollController;
-
+  // Instance de SpeechToText pour la reconnaissance vocale
   final SpeechToText _speechToText = SpeechToText();
-  bool _speechEnabled = false;
-  bool _isListening = false;
-  String _currentText = "";
+  bool isListeningMic = false; // Indique si le microphone est en écoute
+  bool _speechEnabled = false; // Indique si la reconnaissance vocale est activée
+  bool _isListening = false; // Indique si la reconnaissance vocale est en cours
+  String _currentText = ""; // Texte actuel saisi dans le champ de saisie (pour ajouter le texte reconnu à la suite de ce qui est déjà écrit)
 
+  // Initialisation de l'utilisateur
   @override
   void initState() {
     super.initState();
@@ -59,15 +69,17 @@ class _DiscussionPageState extends State<DiscussionPage> {
     });
 
     if (widget.conversation != null) {
-      launchConversation();
+      launchConversation(); // Charge la conversation (sauf si c'est une nouvelle conversation)
     }
 
+    // Charge le SpeechToText si l'application est sur Android
     if(Platform.isAndroid) {
       _initSpeech();
     }
   }
 
 
+  /// Fonction pour descendre en bas de la liste des messages
   void _scrollToBottom() {
     if (_scrollController.hasClients) {
       SchedulerBinding.instance.addPostFrameCallback((_) {
@@ -78,12 +90,14 @@ class _DiscussionPageState extends State<DiscussionPage> {
 
   // ---------------------------------- Speech-to-text ----------------------------------
 
+  /// Initialise le SpeechToText
   Future<void> _initSpeech() async {
     _speechEnabled = await _speechToText.initialize(
     );
     setState(() {});
   }
 
+  /// Démarre ou arrête l'écoute du microphone
   void _startListening() async {
     await _speechToText.listen(
       onResult: _onSpeechResult,
@@ -95,11 +109,13 @@ class _DiscussionPageState extends State<DiscussionPage> {
     setState(() => _isListening = true);
   }
 
+  /// Arrête l'écoute du microphone
   void _stopListening() async {
     await _speechToText.stop();
     setState(() => _isListening = false);
   }
 
+  /// Fonction appelée lorsque le résultat de la reconnaissance vocale est disponible
   void _onSpeechResult(SpeechRecognitionResult result) {
     if (!mounted) return; // Vérifie si le widget est toujours monté
     //inputController.text = result.recognizedWords;
@@ -108,6 +124,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
 
   // ---------------------------------- Fonctions pour l'API ----------------------------------
 
+  /// Crée un client HTTP sécurisé avec le certificat CA
   Future<HttpClient> createSecureHttpClient() async {
     final context = SecurityContext.defaultContext;
     final ByteData certData = await rootBundle.load('assets/certs/myCA.pem');
@@ -115,97 +132,110 @@ class _DiscussionPageState extends State<DiscussionPage> {
     return HttpClient(context: context);
   }
 
-
+  /// Supprime une discussion
   void removeDiscussion(String id) async {
+    // Prépare l'URL pour la requête de suppression
     final uri = Uri.parse('$urlPrefix/delete_conversation/$id');
-
+    // Ajout du bearer token pour l'authentification
     final request = http.MultipartRequest('POST', uri)..headers['Authorization'] = 'Bearer ${user.accessToken}';
 
     try {
+      // Envoie la requête de suppression
       final response = await request.send();
 
       if (response.statusCode == 200) {
-        print("La suppression a réussie");
-
+        //print("La suppression a réussie");
+        // Si la suppression réussit, on recharge les sujets
         loadSubjects().then((sujets) {
+          // Met à jour les données du Drawer avec les nouveaux sujets
           drawerData = Future.value(sujets);
           if (id == widget.conversation?.id) {
+            // Si la conversation supprimée est celle en cours, on redirige vers une nouvelle discussion
             Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => DiscussionPage(titre: "", conversation: null)));
           } else {
-            print("chargement des nouveaux sujets");
             setState(() {});
           }
         });
       } else {
-        print("Erreur lors de la suppression de la conversation : ${response.statusCode}");
+        //print("Erreur lors de la suppression de la conversation : ${response.statusCode}");
       }
     } catch (e) {
-      print("Exception pendant la récupération : $e");
+      // En cas d'erreur, nous n'avons rien a traité côté client
+      //print("Exception pendant la récupération : $e");
     }
   }
 
+  /// Lance la récupération de la conversation
   void launchConversation() async {
+    // Charge un objet Conversation
     widget.conversation = Conversation(id: widget.conversation!.id, title: widget.titre, messages: []);
 
+    // Prépare l'URL pour la requête de récupération de la conversation
     final uri = Uri.parse('$urlPrefix/chat/${widget.conversation!.id}');
-
     final request = http.MultipartRequest('GET', uri)..headers['Authorization'] = 'Bearer ${user.accessToken}';
 
     try {
+      // Envoie la requête pour récupérer la conversation
       final response = await request.send();
 
       if (response.statusCode == 200) {
-        print("Réception de la conversation réussie");
+        //print("Réception de la conversation réussie");
 
+        // Lit le corps de la réponse et le décode en JSON
         final responseBody = await response.stream.bytesToString();
         final json = jsonDecode(responseBody);
-
         List<List<String>> messages = [];
-
+        // Parcourt les messages et les ajoute à la liste
         for (var item in json) {
           final role = item["role"].toString();
           final message = item["content"].toString();
           messages.add([role, message, "naturel"]);
         }
 
-        // Ajouter ces messages à la conversation
+        // Ajoute ces messages à la conversation
         widget.conversation?.messages.addAll(messages);
 
         setState(() {});
         _scrollToBottom();
       } else {
-        print("Erreur lors de la récupération de la conversation : ${response.statusCode}");
+        // En cas d'erreur, nous n'avons rien a traité côté client
+        //print("Erreur lors de la récupération de la conversation : ${response.statusCode}");
       }
     } catch (e) {
-      print("Exception pendant la récupération : $e");
+      // En cas d'exception, nous n'avons rien a traité côté client
+      //print("Exception pendant la récupération : $e");
     }
   }
 
+  /// Déconnexion de l'utilisateur
   void logout() async {
+    // Préparer l'URL pour la requête de déconnexion
     final uri = Uri.parse('$urlPrefix/logout');
     final request = http.MultipartRequest('POST', uri)..headers['Authorization'] = 'Bearer ${user.accessToken}';
     try {
       final response = await request.send();
       if (response.statusCode == 200) {
-        print("Déconnexion réussie");
+        //print("Déconnexion réussie");
       } else {
-        print("Erreur lors de la déconnexion : ${response.statusCode}");
+        //print("Erreur lors de la déconnexion : ${response.statusCode}");
       }
     } catch (e) {
-      print("Exception pendant la récupération : $e");
+      //print("Exception pendant la récupération : $e");
     }
     // Réinitialiser l'utilisateur
     user.clear();
-    // Retourner à la page de connexion
+    // Retourne à la page de connexion
     Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
+  /// Charge les sujets de conversation depuis l'API
   Future<List<ConversationSubject>> loadSubjects() async {
+    // Crée un client HTTP sécurisé
     final client = await createSecureHttpClient();
-
     final url = Uri.parse('$urlPrefix/conversations');
 
     try {
+      // Prépare la requête GET pour récupérer les sujets de conversation
       final request = await client.getUrl(url);
       request.headers.set(HttpHeaders.contentTypeHeader, "application/json");
       // Ajout du token d'authentification
@@ -214,44 +244,47 @@ class _DiscussionPageState extends State<DiscussionPage> {
       final response = await request.close();
 
       if (response.statusCode == 200) {
-        print("Récupération des sujets réussie");
+        //print("Récupération des sujets réussie");
 
         final responseBody = await response.transform(utf8.decoder).join();
         final List<dynamic> data = jsonDecode(responseBody);
-
+        // Convertit la liste JSON en liste d'objets ConversationSubject
         List<ConversationSubject> listeSujets = data.map((json) => ConversationSubject.fromJson(json)).toList();
-
+        // Trie la liste des sujets par date de dernière mise à jour
         listeSujets.sort(
           (a, b) => b.lastUpdate.compareTo(a.lastUpdate), // Tri par date de dernière mise à jour, du plus récent au plus ancien
         );
-
         return listeSujets;
       } else {
-        print("Erreur lors de la récupération des sujets : ${response.statusCode}");
+        //print("Erreur lors de la récupération des sujets : ${response.statusCode}");
+        // En cas d'erreur, nous la faisons remonter
         throw Exception("Erreur lors de la récupération des sujets : ${response.statusCode}");
       }
     } catch (e) {
-      print("Exception pendant la récupération : $e");
+      //print("Exception pendant la récupération : $e");
+      // En cas d'exception, nous la faisons remonter
       throw Exception("Erreur lors de la récupération des sujets.");
     }
   }
 
-
+  /// Fonction appelée lorsque le Drawer est ouvert
   void _onDrawerOpened() {
     setState(() {
       drawerData = loadSubjects();
     });
   }
 
+  /// Ouvre ou ferme le menu latéral (Drawer)
   void openMenu() {
     scaffoldKey.currentState?.openDrawer();
   }
 
+  /// Ferme le menu latéral (Drawer)
   void closeMenu() {
     scaffoldKey.currentState?.closeDrawer();
   }
 
-
+  /// Envoie le message saisi par l'utilisateur
   void send() async {
     setState(() {
       if (widget.conversation == null) {
@@ -264,13 +297,15 @@ class _DiscussionPageState extends State<DiscussionPage> {
           ],
         );
       } else {
+        // Sinon, on ajoute le message à la conversation existante
         widget.conversation?.addMessage("user", inputController.text, "");
       }
       isLoading = true;
-      widget.conversation?.messages.add(["system", "loading", ""]); // message temporaire
+      widget.conversation?.messages.add(["system", "loading", ""]); // message temporaire pour l'animation
     });
     _scrollToBottom();
 
+    // Prépare la requête pour envoyer le message
     final uri = Uri.parse('$urlPrefix/send');
 
     final request =
@@ -280,12 +315,11 @@ class _DiscussionPageState extends State<DiscussionPage> {
           ..fields['conversation_id'] = (widget.conversation?.id).toString()
           ..headers['Authorization'] = 'Bearer ${user.accessToken}';
 
+    // Ajoute les fichiers à la requête s'il y en a
     for (var file in files) {
       final fileStream = http.ByteStream(file.openRead());
       final fileLength = await file.length();
-
       final multipartFile = http.MultipartFile('files', fileStream, fileLength, filename: p.basename(file.path));
-
       request.files.add(multipartFile);
     }
 
@@ -296,14 +330,14 @@ class _DiscussionPageState extends State<DiscussionPage> {
     }
 
     try {
+      // Envoie la requête
       final response = await request.send();
 
       if (response.statusCode == 200) {
-        print("Envoi de message réussi");
+        //print("Envoi de message réussi");
 
         final responseBody = await response.stream.bytesToString();
         final json = jsonDecode(responseBody);
-
 
         if(context.mounted) {
           final String conversationId = json['conversation_id'].toString();
@@ -331,7 +365,8 @@ class _DiscussionPageState extends State<DiscussionPage> {
         }
 
       } else {
-        print("Erreur lors de la récupération des messages : ${response.statusCode}");
+        // Message d'erreur
+        //print("Erreur lors de la récupération des messages : ${response.statusCode}");
         if(context.mounted) {
           setState(() {
             isLoading = false;
@@ -345,7 +380,8 @@ class _DiscussionPageState extends State<DiscussionPage> {
 
       }
     } catch (e) {
-      print("Exception pendant la récupération : $e");
+      // Exception : message d'erreur
+      //print("Exception pendant la récupération : $e");
       if(context.mounted) {
         setState(() {
           isLoading = false;
@@ -359,8 +395,9 @@ class _DiscussionPageState extends State<DiscussionPage> {
     }
   }
 
+  /// Active ou désactive le mode de recherche avancée
   void switchResearchMode() {
-
+    // Si il y a des fichiers, on ne peut pas activer la recherche web
     if(!researchMode && files.isNotEmpty) {
       // Si on est en mode recherche web et qu'il y a des fichiers, on affiche un message d'avertissement
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -412,14 +449,14 @@ class _DiscussionPageState extends State<DiscussionPage> {
     );
   }
 
+  /// Sélectionne des fichiers à envoyer
   Future<void> selectFiles() async {
+    // Ouvre le sélecteur de fichiers
     FilePickerResult? result = await FilePicker.platform.pickFiles(allowMultiple: true, type: FileType.custom, allowedExtensions: ['txt', 'pdf', 'markdown', 'md']);
 
     if (result != null) {
       List<File> selectedFiles = result.paths.map((path) => File(path!)).toList();
-
       for (File f in selectedFiles) {
-
         if (await f.length() > 24000000 || files.length >= 4 || files.any((file) => file.path == f.path)) {
           // Si le fichier est déjà dans la liste ou qu'on a déjà 4 fichiers, on ne l'ajoute pas
           continue;
@@ -455,7 +492,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
     return Scaffold(
       key: scaffoldKey,
       backgroundColor: const Color.fromRGBO(59, 59, 63, 1),
-
+      // Gère l'ouverture et la fermeture du Drawer
       onDrawerChanged: (isOpened) {
         if (isOpened) _onDrawerOpened();
       },
@@ -530,7 +567,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
                           ),
                         );
                       }
-
+                      // Données récupérées avec succès
                       final sujets = snapshot.data!;
 
                       return ListView.builder(
@@ -542,6 +579,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
                             padding: const EdgeInsets.only(top: 10),
                             child: RawMaterialButton(
                               onPressed: () {
+                                // Changement de la page de discussion
                                 Navigator.pushReplacement(
                                   context,
                                   MaterialPageRoute(
@@ -642,7 +680,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
               ),
 
               const Expanded(child: SizedBox()),
-
+              // Bouton de déconnexion
               IconButton(onPressed: logout, icon: Icon(Icons.logout, color: Colors.white, size: 50)),
             ],
           ),
@@ -663,10 +701,11 @@ class _DiscussionPageState extends State<DiscussionPage> {
                     if (widget.conversation?.messages[index][0] == "file") {
                       return SizedBox.shrink();
                     }
-
+                    // Vérifie si le message est de l'utilisateur ou du bot
                     final isUser = widget.conversation?.messages[index][0] == "user";
                     final isBot = widget.conversation?.messages[index][0] == "assistant";
                     final message = widget.conversation?.messages[index][1];
+                    // Vérifie l'émotion
                     String emotion = "";
                     if(widget.conversation?.messages[index].length == 3) {
                       emotion = widget.conversation?.messages[index][2] ?? "naturel";
@@ -675,13 +714,11 @@ class _DiscussionPageState extends State<DiscussionPage> {
                       emotion = "naturel";
                     }
 
-
                     final isLoadingMessage = message == "loading";
 
                     return Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-
                         // Bot avec émotion connue
                         if (isBot && listeEmotions.contains(emotion))
                           Padding(
@@ -695,8 +732,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
                             child: Image.asset('assets/images/naturel.png', width: 32),
                           ),
 
-
-
+                        // Messages
                         Expanded(
                           child: Align(
                             alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
@@ -708,7 +744,9 @@ class _DiscussionPageState extends State<DiscussionPage> {
                               child:
                                   isLoadingMessage
                                       ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                                      : MarkdownBody(
+                                      :
+                                  // Message traité comme du markdown
+                                  MarkdownBody(
                                         data: message!,
                                         selectable: true,
                                         styleSheet: MarkdownStyleSheet(
@@ -758,9 +796,11 @@ class _DiscussionPageState extends State<DiscussionPage> {
               mainAxisAlignment: MainAxisAlignment.start,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
+                // Boutons de la barre de saisie
                 IconButton(onPressed: selectFiles, icon: Icon(Icons.add, color: Colors.black45, size: 30)),
                 IconButton(onPressed: switchResearchMode, icon: Icon(Icons.language, color: researchMode ? Colors.white70 : Colors.black45, size: 30)),
 
+                // Champ de saisie de texte
                 Expanded(
                   child: TextField(
                     controller: inputController,
@@ -768,13 +808,13 @@ class _DiscussionPageState extends State<DiscussionPage> {
                     style: const TextStyle(color: Colors.white, fontSize: 16),
                     cursorColor: Colors.white,
                     maxLength: 25000,
-
                     onSubmitted: (value) {
+                      // Envoie le message lorsque l'utilisateur appuie sur "Entrée"
                       send();
                     },
                   ),
                 ),
-
+                // Bouton microphone pour la reconnaissance vocale
                 if(Platform.isAndroid)
                   IconButton(onPressed: () {
                     if(_speechEnabled && !_isListening) {
@@ -791,12 +831,13 @@ class _DiscussionPageState extends State<DiscussionPage> {
                     }
 
                   }, icon: Icon(Icons.mic, color: isListeningMic ? Colors.white54 : Colors.black45, size: 30)),
-
+                // Bouton d'envoi du message
                 IconButton(onPressed: send, icon: const Icon(Icons.send_rounded, color: Colors.black45, size: 30)),
               ],
             ),
           ),
 
+          // Liste des fichiers sélectionnés
           files.isEmpty
               ? const SizedBox(height: 60)
               : Padding(

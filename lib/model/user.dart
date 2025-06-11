@@ -1,6 +1,14 @@
 
 import 'dart:core';
 
+/* ----------------------------------
+  Projet 4A : Chatbot App
+  Date : 11/06/2025
+  user.dart
+---------------------------------- */
+
+/// Classe représentant un utilisateur
+/// Elle contient le token d'authentification, le type de token et le nom d'utilisateur
 class User {
 
   String accessToken;
