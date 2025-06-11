@@ -103,8 +103,31 @@ class _HomePageState extends State<HomePage> {
       final response = await request.close();
 
       if (response.statusCode == 200) {
-        print("Inscription réussie"); // todo
-        connexion(); // Appelle la version corrigée de connexion avec le context
+        print("Inscription réussie");
+
+        showDialog(context: context, builder: (context) {
+          return AlertDialog(
+            title: const Text("Inscription réussie",
+              style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            content: const Text("Veuillez valider votre comptre via votre email avant de vous connecter.",
+              style: TextStyle(color: Colors.white, fontSize: 16),
+            ),
+            backgroundColor: const Color.fromRGBO(117, 117, 117, 1.0),
+
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                },
+                child: const Text("OK",
+                  style: TextStyle(color: Colors.white, fontSize: 16),
+                ),
+              ),
+            ],
+          );
+        },);
+
       } else {
         print("Erreur lors de l'inscription : ${response.statusCode}");
         setState(() {
@@ -135,6 +158,7 @@ class _HomePageState extends State<HomePage> {
             const SizedBox(height: 10),
             Expanded(child: Image.asset("assets/logo.png", width: 320, height: 320)),
 
+
             messageErreur.isNotEmpty ?
               SizedBox(
                 height: 30,
@@ -159,7 +183,7 @@ class _HomePageState extends State<HomePage> {
                 child: TextField(
                   controller: usernameController,
                   decoration: InputDecoration(
-                    hintText: "Identifiant",
+                    hintText: "Adresse Mail",
                     hintStyle: const TextStyle(color: Colors.white30),
                     border: InputBorder.none,
                     contentPadding: const EdgeInsets.symmetric(horizontal: 20),

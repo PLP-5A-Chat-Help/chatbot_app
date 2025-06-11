@@ -420,7 +420,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
 
       for (File f in selectedFiles) {
 
-        if (await f.length() > 10000000 || files.length >= 4 || files.any((file) => file.path == f.path)) {
+        if (await f.length() > 24000000 || files.length >= 4 || files.any((file) => file.path == f.path)) {
           // Si le fichier est déjà dans la liste ou qu'on a déjà 4 fichiers, on ne l'ajoute pas
           continue;
         } else {
