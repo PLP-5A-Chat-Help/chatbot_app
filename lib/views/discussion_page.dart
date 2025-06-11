@@ -34,6 +34,8 @@ class _DiscussionPageState extends State<DiscussionPage> {
   bool isLoading = false;
   Future<List<ConversationSubject>>? drawerData;
 
+  final listeEmotions = ["naturel","amoureux","colère","détective","effrayant","endormi","fatigué","heureux","inquiet","intello","pensif","professeur","soulagé","surpris","triste"];
+
   late final ScrollController _scrollController;
 
   @override
@@ -116,7 +118,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
         for (var item in json) {
           final role = item["role"].toString();
           final message = item["content"].toString();
-          messages.add([role, message]);
+          messages.add([role, message, "naturel"]);
         }
 
         // Ajouter ces messages à la conversation
@@ -211,14 +213,14 @@ class _DiscussionPageState extends State<DiscussionPage> {
           id: "-1",
           title: "",
           messages: [
-            ["user", inputController.text],
+            ["user", inputController.text, ""],
           ],
         );
       } else {
-        widget.conversation?.addMessage("user", inputController.text);
+        widget.conversation?.addMessage("user", inputController.text, "");
       }
       isLoading = true;
-      widget.conversation?.messages.add(["system", "loading"]); // message temporaire
+      widget.conversation?.messages.add(["system", "loading", ""]); // message temporaire
     });
     _scrollToBottom();
 
@@ -260,6 +262,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
           final String conversationId = json['conversation_id'].toString();
           final String responseText = json['response'].toString();
           final String title = json['title'].toString();
+          final String emotion = (json['emotion'] ?? 'naturel').toString();
 
           if (widget.conversation?.id == "-1") {
             // Si la conversation est nouvelle, on lui donne un ID reçu
@@ -271,7 +274,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
             // Remplace le "loading" par la vraie réponse
             final firstIndex = widget.conversation!.messages.indexWhere((msg) => msg[0] == "system" && msg[1] == "loading");
             if (firstIndex != -1) {
-              widget.conversation!.messages[firstIndex] = ["assistant", responseText];
+              widget.conversation!.messages[firstIndex] = ["assistant", responseText, emotion];
               if (widget.conversation?.title == "") {
                 // Si le titre de la conversation est vide, on le met à jour
                 widget.conversation?.title = title;
@@ -288,7 +291,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
             // Remplace le "loading" par un message d'erreur
             final firstIndex = widget.conversation!.messages.indexWhere((msg) => msg[0] == "system" && msg[1] == "loading");
             if (firstIndex != -1) {
-              widget.conversation!.messages[firstIndex] = ["assistant", "Erreur lors de la récupération des messages"];
+              widget.conversation!.messages[firstIndex] = ["assistant", "Erreur lors de la récupération des messages", ""];
             }
           });
         }
@@ -302,7 +305,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
           // Remplace le "loading" par un message d'erreur
           final lastIndex = widget.conversation!.messages.lastIndexWhere((msg) => msg[0] == "system" && msg[1] == "loading");
           if (lastIndex != -1) {
-            widget.conversation!.messages[lastIndex] = ["assistant", "Erreur lors de la récupération des messages"];
+            widget.conversation!.messages[lastIndex] = ["assistant", "Erreur lors de la récupération des messages", ""];
           }
         });
       }
@@ -411,107 +414,158 @@ class _DiscussionPageState extends State<DiscussionPage> {
 
       // Menu latéral (Drawer)
       drawer: Drawer(
-        width: 300,
-        backgroundColor: const Color.fromRGBO(70, 70, 70, 1),
-        child: SingleChildScrollView(
-          scrollDirection: Axis.vertical,
-          physics: const BouncingScrollPhysics(),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.start,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Image.asset("assets/logo.png", width: 128, height: 128),
+      width: 300,
+      backgroundColor: const Color.fromRGBO(70, 70, 70, 1),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          // Partie haute scrollable
+          Expanded(
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: Column(
+                children: [
+                  const SizedBox(height: 16),
+                  Image.asset("assets/logo.png", width: 128, height: 128),
 
-              // Bouton pour créer une nouvelle discussion
-              RawMaterialButton(
-                onPressed: () {
-                  Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => DiscussionPage.empty()));
-                },
-
-                child: Container(
-                  width: 300,
-                  height: 50,
-                  decoration: BoxDecoration(color: const Color.fromRGBO(103, 103, 103, 1)),
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.start,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      SizedBox(width: 10),
-                      Text("Nouvelle discussion", style: TextStyle(color: Colors.white, fontSize: 20)),
-                      Expanded(child: SizedBox()),
-                      Icon(Icons.add_circle_outline, color: Colors.white, size: 32),
-                      SizedBox(width: 16),
-                    ],
+                  // Bouton nouvelle discussion
+                  RawMaterialButton(
+                    onPressed: () {
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(builder: (context) => DiscussionPage.empty()),
+                      );
+                    },
+                    child: Container(
+                      width: 300,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        color: const Color.fromRGBO(103, 103, 103, 1),
+                      ),
+                      child: const Row(
+                        children: [
+                          SizedBox(width: 10),
+                          Text("Nouvelle discussion", style: TextStyle(color: Colors.white, fontSize: 20)),
+                          Expanded(child: SizedBox()),
+                          Icon(Icons.add_circle_outline, color: Colors.white, size: 32),
+                          SizedBox(width: 16),
+                        ],
+                      ),
+                    ),
                   ),
-                ),
-              ),
 
-              // Liste des sujets des discussions
-              SizedBox(
-                height: MediaQuery.of(context).size.height - 200,
-                child: FutureBuilder<List<ConversationSubject>>(
-                  future: drawerData,
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
-                    } else if (snapshot.hasError) {
-                      return Center(child: Text("Erreur : ${snapshot.error}", style: TextStyle(color: Colors.white, fontSize: 20)));
-                    } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                      return const Center(child: Text("Aucun sujet trouvé.", style: TextStyle(color: Colors.white, fontSize: 20)));
-                    }
-
-                    final sujets = snapshot.data!;
-
-                    return ListView.builder(
-                      itemCount: sujets.length,
-                      itemBuilder: (context, index) {
-                        return Padding(
-                          padding: const EdgeInsets.only(top: 10),
-                          child: RawMaterialButton(
-                            onPressed: () {
-                              Navigator.pushReplacement(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => DiscussionPage(titre: sujets[index].titre, conversation: Conversation(id: sujets[index].id, title: sujets[index].titre, messages: [])),
-                                ),
-                              );
-                            },
-                            child: Container(
-                              width: 300,
-                              height: 50,
-                              decoration: BoxDecoration(color: const Color.fromRGBO(103, 103, 103, 1)),
-                              child: Row(
-                                children: [
-                                  const SizedBox(width: 10),
-                                  SizedBox(
-                                    width: 230,
-                                    child: AutoSizeText(sujets[index].titre, style: const TextStyle(color: Colors.white, fontSize: 20), maxLines: 1, maxFontSize: 20, minFontSize: 8),
-                                  ),
-                                  const Expanded(child: SizedBox()),
-                                  IconButton(
-                                    onPressed: () {
-                                      removeDiscussion(sujets[index].id);
-                                    },
-                                    icon: const Icon(Icons.delete, color: Colors.white, size: 32),
-                                  ),
-                                  const SizedBox(width: 10),
-                                ],
-                              ),
+                  // Liste des discussions
+                  FutureBuilder<List<ConversationSubject>>(
+                    future: drawerData,
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: Padding(
+                          padding: EdgeInsets.only(top:10),
+                          child: CircularProgressIndicator(),
+                        ));
+                      } else if (snapshot.hasError) {
+                        return Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(8.0),
+                            child: Text("${snapshot.error}",
+                              style: const TextStyle(color: Colors.white, fontSize: 20),
                             ),
                           ),
                         );
-                      },
-                    );
-                  },
-                ),
+                      } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                        return const Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(8.0),
+                            child: Text("Aucun sujet trouvé.",
+                              style: TextStyle(color: Colors.white, fontSize: 20),
+                            ),
+                          ),
+                        );
+                      }
+
+                      final sujets = snapshot.data!;
+
+                      return ListView.builder(
+                        shrinkWrap: true, // important pour ListView dans Column
+                        physics: const NeverScrollableScrollPhysics(), // évite conflits avec le SingleChildScrollView
+                        itemCount: sujets.length,
+                        itemBuilder: (context, index) {
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 10),
+                            child: RawMaterialButton(
+                              onPressed: () {
+                                Navigator.pushReplacement(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => DiscussionPage(
+                                      titre: sujets[index].titre,
+                                      conversation: Conversation(
+                                        id: sujets[index].id,
+                                        title: sujets[index].titre,
+                                        messages: [],
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                              child: Container(
+                                width: 300,
+                                height: 50,
+                                decoration: BoxDecoration(color: const Color.fromRGBO(103, 103, 103, 1)),
+                                child: Row(
+                                  children: [
+                                    const SizedBox(width: 10),
+                                    SizedBox(
+                                      width: 230,
+                                      child: AutoSizeText(
+                                        sujets[index].titre,
+                                        style: const TextStyle(color: Colors.white, fontSize: 20),
+                                        maxLines: 1,
+                                        maxFontSize: 20,
+                                        minFontSize: 8,
+                                      ),
+                                    ),
+                                    const Expanded(child: SizedBox()),
+                                    IconButton(
+                                      onPressed: () {
+                                        removeDiscussion(sujets[index].id);
+                                      },
+                                      icon: const Icon(Icons.delete, color: Colors.white, size: 32),
+                                    ),
+                                    const SizedBox(width: 10),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
 
+          // Partie basse avec le nom d'utilisateur
+          Container(
+            width: 300,
+            height: 50,
+            decoration: const BoxDecoration(color: Color.fromRGBO(103, 103, 103, 1)),
+            child: Center(
+              child: Text(
+                user.username,
+                style: const TextStyle(color: Colors.white, fontSize: 16),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+        ],
       ),
+    ),
 
-      // Page de discussion
+
+    // Page de discussion
       body: Column(
         mainAxisAlignment: MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -565,16 +619,35 @@ class _DiscussionPageState extends State<DiscussionPage> {
                     final isUser = widget.conversation?.messages[index][0] == "user";
                     final isBot = widget.conversation?.messages[index][0] == "assistant";
                     final message = widget.conversation?.messages[index][1];
+                    String emotion = "";
+                    if(widget.conversation?.messages[index].length == 3) {
+                      emotion = widget.conversation?.messages[index][2] ?? "naturel";
+                    }
+                    else {
+                      emotion = "naturel";
+                    }
+
+
                     final isLoadingMessage = message == "loading";
 
                     return Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
 
-                        if (isBot) ...[
-                          const SizedBox(width: 8),
-                          Image.asset('assets/images/professeur.png', width: 32),
-                        ],
+                        // Bot avec émotion connue
+                        if (isBot && listeEmotions.contains(emotion))
+                          Padding(
+                            padding: const EdgeInsets.only(left: 8, top: 8),
+                            child: Image.asset('assets/images/$emotion.png', width: 32),
+                          ),
+                        // Bot avec émotion inconnue --> image naturelle
+                        if(isBot && !listeEmotions.contains(emotion))
+                          Padding(
+                            padding: const EdgeInsets.only(left: 8, top: 8),
+                            child: Image.asset('assets/images/naturel.png', width: 32),
+                          ),
+
+
 
                         Expanded(
                           child: Align(
@@ -654,13 +727,16 @@ class _DiscussionPageState extends State<DiscussionPage> {
                   ),
                 ),
 
+                if(Platform.isAndroid)
+                  IconButton(onPressed: () {}, icon: const Icon(Icons.mic, color: Colors.black45, size: 30)),
+
                 IconButton(onPressed: send, icon: const Icon(Icons.send_rounded, color: Colors.black45, size: 30)),
               ],
             ),
           ),
 
           files.isEmpty
-              ? const SizedBox(height: 50)
+              ? const SizedBox(height: 60)
               : Padding(
                 padding: const EdgeInsets.all(8.0),
                 child: SizedBox(

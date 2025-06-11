@@ -5,10 +5,12 @@ class User {
 
   String accessToken;
   String tokenType;
+  String username;
 
   User({
     required this.accessToken,
     required this.tokenType,
+    required this.username,
   });
 
   void setAccessToken(String token) {

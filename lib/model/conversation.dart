@@ -13,8 +13,8 @@ class Conversation {
     required this.messages,
   });
 
-  void addMessage(String sender, String message) {
-    messages.add([sender, message]);
+  void addMessage(String sender, String message, String image) {
+    messages.add([sender, message, image]);
   }
 
 }
