@@ -34,3 +34,7 @@ Pour regénérer ces fichiers d'installation à partir du projet, il suffit d'ex
 - ```flutter build windows``` pour Windows,
 - ```flutter build apk``` pour Android.
 
+## Serveur
+
+Le code de l'API du serveur est situé dans le répertoire GitHub suivant :
+https://github.com/Not-Yukii/API-Projet-IA
