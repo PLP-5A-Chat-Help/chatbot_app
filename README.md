@@ -3,7 +3,8 @@
 Application Client pour effectuer des requêtes auprès de notre chatbot dans le cadre d'un projet de quatrième année.
 L'application a deux versions disponibles : un exécutable pour Windows et un installeur apk pour Android.
 
-Pour toutes requêtes, l'application contacte un serveur sur l'adresse IP 192.168.100.1. 
+Pour toutes requêtes, l'application contacte l'API du serveur sur l'adresse ```192.168.100.1:8000```. 
+Cette adresse est modifiable dans le fichier "variables.dart" dans le répertoire "lib".
 
 ## Fonctionnalités
 ### Recherche
@@ -25,3 +26,11 @@ D'autres fonctions sont implémentées :
 - Speech-to-text (/!\ uniquement pour Android /!\) pour écrire les prompts en parlant
 - Accès à des anciennes conversations
 - Suppression d'anciennes conversations
+
+## Exécuter
+Pour lancer l'application, vous pouvez accéder à la section **Releases** de ce GitHub. Vous y trouverez un fichier ZIP à extraire pour obtenir l'exécutable Windows (à exécuter dans le dossier où il a été extrait), ainsi qu'un fichier APK à lancer sur un appareil Android pour télécharger l'application.
+
+Pour regénérer ces fichiers d'installation à partir du projet, il suffit d'exécuter les commandes :
+- ```flutter build windows``` pour Windows,
+- ```flutter build apk``` pour Android.
+
