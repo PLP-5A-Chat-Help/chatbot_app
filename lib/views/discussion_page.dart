@@ -40,6 +40,8 @@ class _DiscussionPageState extends State<DiscussionPage> {
   // Variables
   GlobalKey<ScaffoldState> scaffoldKey = GlobalKey<ScaffoldState>(); // Clé pour le Scaffold (utile pour gérer le Drawer)
   TextEditingController inputController = TextEditingController(); // Contrôleur pour le champ de saisie de texte
+  final TextEditingController subjectSearchController = TextEditingController();
+  String subjectSearch = "";
   late final ScrollController _scrollController; // Contrôleur pour le défilement de la liste des messages
   bool researchMode = false; // true = recherche web, false = recherche locale
   List<File> files = []; // Liste des fichiers sélectionnés
@@ -63,6 +65,14 @@ class _DiscussionPageState extends State<DiscussionPage> {
     super.initState();
     _scrollController = ScrollController();
 
+    drawerData = loadSubjects();
+    subjectSearchController.addListener(() {
+      if (!mounted) return;
+      setState(() {
+        subjectSearch = subjectSearchController.text;
+      });
+    });
+
     // Scroll to the bottom after the first frame
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrollToBottom();
@@ -76,6 +86,14 @@ class _DiscussionPageState extends State<DiscussionPage> {
     if(Platform.isAndroid) {
       _initSpeech();
     }
+  }
+
+  @override
+  void dispose() {
+    inputController.dispose();
+    subjectSearchController.dispose();
+    _scrollController.dispose();
+    super.dispose();
   }
 
 
@@ -489,405 +507,935 @@ class _DiscussionPageState extends State<DiscussionPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      key: scaffoldKey,
-      backgroundColor: const Color.fromRGBO(59, 59, 63, 1),
-      // Gère l'ouverture et la fermeture du Drawer
-      onDrawerChanged: (isOpened) {
-        if (isOpened) _onDrawerOpened();
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isWide = constraints.maxWidth >= 1000;
+        return Scaffold(
+          key: scaffoldKey,
+          backgroundColor: const Color(0xFF0B101A),
+          drawer: isWide
+              ? null
+              : Drawer(
+                  width: 320,
+                  backgroundColor: const Color(0xFF111827),
+                  child: SafeArea(
+                    child: _buildConversationSidebar(isDrawer: true),
+                  ),
+                ),
+          onDrawerChanged: (isOpened) {
+            if (isOpened) _onDrawerOpened();
+          },
+          body: SafeArea(
+            child: isWide
+                ? Row(
+                    children: [
+                      _buildPrimarySidebar(),
+                      _buildConversationSidebar(),
+                      Expanded(child: _buildChatSection(isWide: true)),
+                    ],
+                  )
+                : _buildChatSection(isWide: false),
+          ),
+        );
       },
+    );
+  }
 
-      // Menu latéral (Drawer)
-      drawer: Drawer(
-      width: 300,
-      backgroundColor: const Color.fromRGBO(70, 70, 70, 1),
+  Widget _buildPrimarySidebar() {
+    return Container(
+      width: 88,
+      decoration: BoxDecoration(
+        color: const Color(0xFF0F172A),
+        border: Border(
+          right: BorderSide(color: Colors.white.withOpacity(0.05)),
+        ),
+      ),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // Partie haute scrollable
-          Expanded(
-            child: SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
-              child: Column(
-                children: [
-                  const SizedBox(height: 16),
-                  Image.asset("assets/logo.png", width: 128, height: 128),
+          const SizedBox(height: 24),
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: const Color(0xFF1F2937),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(10),
+              child: Image.asset('assets/logo.png', fit: BoxFit.contain),
+            ),
+          ),
+          const SizedBox(height: 32),
+          _buildSidebarIcon(icon: Icons.chat_bubble_outline, active: true),
+          _buildSidebarIcon(icon: Icons.folder_copy_outlined),
+          _buildSidebarIcon(icon: Icons.analytics_outlined),
+          _buildSidebarIcon(icon: Icons.settings_outlined),
+          const Spacer(),
+          Container(
+            margin: const EdgeInsets.only(bottom: 24),
+            child: CircleAvatar(
+              radius: 22,
+              backgroundColor: const Color(0xFF1F2937),
+              child: Text(
+                user.username.isNotEmpty ? user.username[0].toUpperCase() : '?',
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-                  // Bouton nouvelle discussion
-                  RawMaterialButton(
-                    onPressed: () {
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(builder: (context) => DiscussionPage.empty()),
-                      );
-                    },
-                    child: Container(
-                      width: 300,
-                      height: 50,
-                      decoration: BoxDecoration(
-                        color: const Color.fromRGBO(103, 103, 103, 1),
+  Widget _buildSidebarIcon({required IconData icon, bool active = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: () {},
+        child: Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: active ? const Color(0xFF1F2937) : Colors.transparent,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: active ? Colors.white.withOpacity(0.25) : Colors.white.withOpacity(0.06)),
+          ),
+          child: Icon(icon, color: active ? Colors.white : Colors.white60),
+        ),
+      ),
+    );
+  }
+  Widget _buildConversationSidebar({bool isDrawer = false}) {
+    return Container(
+      width: isDrawer ? double.infinity : 320,
+      decoration: BoxDecoration(
+        color: const Color(0xFF111827),
+        border: Border(
+          right: BorderSide(color: Colors.white.withOpacity(isDrawer ? 0 : 0.05)),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'My Chats',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Stay on top of your conversations',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.6),
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                InkWell(
+                  onTap: () {
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(builder: (context) => DiscussionPage.empty()),
+                    );
+                  },
+                  borderRadius: BorderRadius.circular(20),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF2563EB), Color(0xFF7C3AED)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                       ),
-                      child: const Row(
-                        children: [
-                          SizedBox(width: 10),
-                          Text("Nouvelle discussion", style: TextStyle(color: Colors.white, fontSize: 20)),
-                          Expanded(child: SizedBox()),
-                          Icon(Icons.add_circle_outline, color: Colors.white, size: 32),
-                          SizedBox(width: 16),
-                        ],
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF2563EB).withOpacity(0.3),
+                          blurRadius: 16,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.18),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(Icons.add, color: Colors.white),
+                        ),
+                        const SizedBox(width: 16),
+                        const Expanded(
+                          child: Text(
+                            'New conversation',
+                            style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.06),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: Colors.white.withOpacity(0.08)),
+              ),
+              child: Row(
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 16),
+                    child: Icon(Icons.search, color: Colors.white54),
+                  ),
+                  Expanded(
+                    child: TextField(
+                      controller: subjectSearchController,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: InputDecoration(
+                        hintText: 'Search conversations',
+                        hintStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
+                        border: InputBorder.none,
                       ),
                     ),
                   ),
+                  if (subjectSearch.isNotEmpty)
+                    IconButton(
+                      onPressed: () {
+                        subjectSearchController.clear();
+                      },
+                      icon: const Icon(Icons.close, color: Colors.white54),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Expanded(
+            child: FutureBuilder<List<ConversationSubject>>(
+              future: drawerData,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(
+                    child: CircularProgressIndicator(color: Colors.white24),
+                  );
+                } else if (snapshot.hasError) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Text(
+                        '${snapshot.error}',
+                        style: const TextStyle(color: Colors.white70, fontSize: 14),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  );
+                } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                  return Center(
+                    child: Text(
+                      'No conversations yet',
+                      style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 15),
+                    ),
+                  );
+                }
 
-                  // Liste des discussions
-                  FutureBuilder<List<ConversationSubject>>(
-                    future: drawerData,
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const Center(child: Padding(
-                          padding: EdgeInsets.only(top:10),
-                          child: CircularProgressIndicator(),
-                        ));
-                      } else if (snapshot.hasError) {
-                        return Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(8.0),
-                            child: Text("${snapshot.error}",
-                              style: const TextStyle(color: Colors.white, fontSize: 20),
-                            ),
-                          ),
-                        );
-                      } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                        return const Center(
-                          child: Padding(
-                            padding: EdgeInsets.all(8.0),
-                            child: Text("Aucun sujet trouvé.",
-                              style: TextStyle(color: Colors.white, fontSize: 20),
-                            ),
-                          ),
-                        );
-                      }
-                      // Données récupérées avec succès
-                      final sujets = snapshot.data!;
+                final sujets = snapshot.data!;
+                final filteredSubjects = sujets.where((subject) {
+                  if (subjectSearch.isEmpty) return true;
+                  return subject.titre.toLowerCase().contains(subjectSearch.toLowerCase());
+                }).toList();
 
-                      return ListView.builder(
-                        shrinkWrap: true, // important pour ListView dans Column
-                        physics: const NeverScrollableScrollPhysics(), // évite conflits avec le SingleChildScrollView
-                        itemCount: sujets.length,
-                        itemBuilder: (context, index) {
-                          return Padding(
-                            padding: const EdgeInsets.only(top: 10),
-                            child: RawMaterialButton(
-                              onPressed: () {
-                                // Changement de la page de discussion
-                                Navigator.pushReplacement(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => DiscussionPage(
-                                      titre: sujets[index].titre,
-                                      conversation: Conversation(
-                                        id: sujets[index].id,
-                                        title: sujets[index].titre,
-                                        messages: [],
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              },
-                              child: Container(
-                                width: 300,
-                                height: 50,
-                                decoration: BoxDecoration(color: const Color.fromRGBO(103, 103, 103, 1)),
-                                child: Row(
-                                  children: [
-                                    const SizedBox(width: 10),
-                                    SizedBox(
-                                      width: 230,
-                                      child: AutoSizeText(
-                                        sujets[index].titre,
-                                        style: const TextStyle(color: Colors.white, fontSize: 20),
-                                        maxLines: 1,
-                                        maxFontSize: 20,
-                                        minFontSize: 8,
-                                      ),
-                                    ),
-                                    const Expanded(child: SizedBox()),
-                                    IconButton(
-                                      onPressed: () {
-                                        removeDiscussion(sujets[index].id);
-                                      },
-                                      icon: const Icon(Icons.delete, color: Colors.white, size: 32),
-                                    ),
-                                    const SizedBox(width: 10),
-                                  ],
-                                ),
+                if (filteredSubjects.isEmpty) {
+                  return Center(
+                    child: Text(
+                      'No conversations found',
+                      style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 15),
+                    ),
+                  );
+                }
+
+                return ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+                  itemCount: filteredSubjects.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  itemBuilder: (context, index) {
+                    final subject = filteredSubjects[index];
+                    final isActive = widget.conversation?.id == subject.id;
+                    final formattedDate = _formatDate(subject.lastUpdate);
+
+                    return GestureDetector(
+                      onTap: () {
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => DiscussionPage(
+                              titre: subject.titre,
+                              conversation: Conversation(
+                                id: subject.id,
+                                title: subject.titre,
+                                messages: [],
                               ),
                             ),
-                          );
-                        },
-                      );
-                    },
+                          ),
+                        );
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(18),
+                        decoration: BoxDecoration(
+                          color: isActive ? Colors.white.withOpacity(0.1) : Colors.white.withOpacity(0.03),
+                          borderRadius: BorderRadius.circular(22),
+                          border: Border.all(color: isActive ? Colors.white.withOpacity(0.3) : Colors.transparent),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 42,
+                              height: 42,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.08),
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              child: const Icon(Icons.forum_outlined, color: Colors.white70),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    subject.titre,
+                                    style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    formattedDate,
+                                    style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 12),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            InkWell(
+                              onTap: () {
+                                removeDiscussion(subject.id);
+                              },
+                              borderRadius: BorderRadius.circular(16),
+                              child: Container(
+                                width: 36,
+                                height: 36,
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.08),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Icon(Icons.delete_outline, color: Colors.white70, size: 20),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.03),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: Colors.white.withOpacity(0.06)),
+              ),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 20,
+                    backgroundColor: const Color(0xFF1F2937),
+                    child: Text(
+                      user.username.isNotEmpty ? user.username[0].toUpperCase() : '?',
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          user.username,
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                        ),
+                        Text(
+                          'Active session',
+                          style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                  _buildHeaderAction(
+                    icon: Icons.logout,
+                    tooltip: 'Log out',
+                    onTap: logout,
                   ),
                 ],
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+  Widget _buildChatSection({required bool isWide}) {
+    final conversationTitle = widget.conversation?.title.isNotEmpty == true
+        ? widget.conversation!.title
+        : (widget.titre.isNotEmpty ? widget.titre : 'New conversation');
 
-          // Partie basse avec le nom d'utilisateur
-          Container(
-            width: 300,
-            height: 50,
-            decoration: const BoxDecoration(color: Color.fromRGBO(103, 103, 103, 1)),
-            child: Center(
-              child: Text(
-                user.username,
-                style: const TextStyle(color: Colors.white, fontSize: 16),
-                textAlign: TextAlign.center,
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFF0B101A), Color(0xFF111A2C)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: isWide ? 36 : 20,
+              vertical: isWide ? 32 : 20,
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                if (!isWide)
+                  _buildHeaderAction(
+                    icon: Icons.menu,
+                    tooltip: 'Open conversations',
+                    onTap: openMenu,
+                  )
+                else
+                  CircleAvatar(
+                    radius: 24,
+                    backgroundColor: const Color(0xFF1F2937),
+                    child: const Icon(Icons.warning_amber_rounded, color: Colors.white70),
+                  ),
+                SizedBox(width: isWide ? 20 : 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        conversationTitle,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: isWide ? 24 : 20,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        researchMode ? 'Web search enabled' : 'Local knowledge base',
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.6),
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (isLoading)
+                  _buildStatusChip('Generating response...'),
+                if (!isWide) const SizedBox(width: 8),
+                _buildHeaderAction(
+                  icon: Icons.refresh,
+                  tooltip: 'Reload conversations',
+                  onTap: () {
+                    setState(() {
+                      drawerData = loadSubjects();
+                    });
+                  },
+                ),
+                if (isWide) const SizedBox(width: 12),
+                _buildHeaderAction(
+                  icon: Icons.logout,
+                  tooltip: 'Log out',
+                  onTap: logout,
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: Container(
+              margin: EdgeInsets.symmetric(horizontal: isWide ? 36 : 16),
+              padding: EdgeInsets.all(isWide ? 28 : 18),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.03),
+                borderRadius: BorderRadius.circular(isWide ? 30 : 22),
+                border: Border.all(color: Colors.white.withOpacity(0.05)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.25),
+                    blurRadius: 24,
+                    offset: const Offset(0, 18),
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(isWide ? 24 : 18),
+                child: Container(
+                  color: Colors.black.withOpacity(0.2),
+                  child: widget.conversation == null
+                      ? _buildEmptyState()
+                      : _buildMessagesList(isWide: isWide),
+                ),
               ),
             ),
+          ),
+          if (files.isNotEmpty) _buildFilesPreview(isWide: isWide),
+          _buildInputBar(isWide: isWide),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMessagesList({required bool isWide}) {
+    return ListView.builder(
+      controller: _scrollController,
+      padding: EdgeInsets.symmetric(horizontal: isWide ? 24 : 16, vertical: isWide ? 24 : 20),
+      itemCount: widget.conversation?.messages.length ?? 0,
+      itemBuilder: (context, index) {
+        final messageData = widget.conversation?.messages[index];
+        if (messageData == null || messageData.isEmpty || messageData[0] == 'file') {
+          return const SizedBox.shrink();
+        }
+
+        final role = messageData[0].toString();
+        final messageContent = messageData[1].toString();
+        final isUser = role == 'user';
+        final isBot = role == 'assistant';
+        var emotion = 'naturel';
+        if (messageData.length >= 3) {
+          final rawEmotion = messageData[2];
+          if (rawEmotion is String && rawEmotion.isNotEmpty) {
+            emotion = rawEmotion;
+          }
+        }
+
+        final isLoadingMessage = messageContent == 'loading';
+
+        final bubble = Container(
+          constraints: BoxConstraints(maxWidth: isWide ? 540 : MediaQuery.of(context).size.width * 0.8),
+          padding: EdgeInsets.symmetric(horizontal: isWide ? 20 : 16, vertical: isWide ? 18 : 14),
+          decoration: BoxDecoration(
+            gradient: isUser
+                ? const LinearGradient(
+                    colors: [Color(0xFF2563EB), Color(0xFF0EA5E9)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  )
+                : null,
+            color: isUser ? null : Colors.white.withOpacity(0.05),
+            borderRadius: BorderRadius.only(
+              topLeft: const Radius.circular(22),
+              topRight: const Radius.circular(22),
+              bottomLeft: Radius.circular(isUser ? 22 : 6),
+              bottomRight: Radius.circular(isUser ? 6 : 22),
+            ),
+            border: Border.all(color: Colors.white.withOpacity(isUser ? 0.0 : 0.05)),
+            boxShadow: [
+              if (isUser)
+                const BoxShadow(
+                  color: Color(0x552563EB),
+                  blurRadius: 18,
+                  offset: Offset(0, 10),
+                )
+              else
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.25),
+                  blurRadius: 16,
+                  offset: const Offset(0, 10),
+                ),
+            ],
+          ),
+          child: isLoadingMessage
+              ? const SizedBox(
+                  height: 24,
+                  width: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                )
+              : MarkdownBody(
+                  data: messageContent,
+                  selectable: true,
+                  styleSheet: MarkdownStyleSheet(
+                    p: TextStyle(color: Colors.white.withOpacity(0.92), fontSize: isWide ? 15 : 14, height: 1.5),
+                    code: TextStyle(color: Colors.white.withOpacity(0.9), fontFamily: 'monospace', fontSize: isWide ? 14 : 13),
+                    blockquote: TextStyle(color: Colors.white.withOpacity(0.85), fontSize: isWide ? 15 : 14, fontStyle: FontStyle.italic),
+                    h1: TextStyle(color: Colors.white, fontSize: isWide ? 26 : 22, fontWeight: FontWeight.bold),
+                    h2: TextStyle(color: Colors.white, fontSize: isWide ? 24 : 20, fontWeight: FontWeight.bold),
+                    h3: TextStyle(color: Colors.white, fontSize: isWide ? 22 : 18, fontWeight: FontWeight.bold),
+                    h4: TextStyle(color: Colors.white, fontSize: isWide ? 20 : 17, fontWeight: FontWeight.bold),
+                    h5: TextStyle(color: Colors.white, fontSize: isWide ? 18 : 16, fontWeight: FontWeight.bold),
+                    h6: TextStyle(color: Colors.white, fontSize: isWide ? 16 : 15, fontWeight: FontWeight.bold),
+                    a: const TextStyle(color: Color(0xFF60A5FA), decoration: TextDecoration.underline),
+                    strong: TextStyle(color: Colors.white.withOpacity(0.95), fontWeight: FontWeight.w700),
+                    em: TextStyle(color: Colors.white.withOpacity(0.85), fontStyle: FontStyle.italic),
+                    del: TextStyle(color: Colors.white.withOpacity(0.7), decoration: TextDecoration.lineThrough),
+                    blockquoteDecoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.04),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.white.withOpacity(0.1)),
+                    ),
+                    codeblockDecoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.4),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.white.withOpacity(0.08)),
+                    ),
+                    listBullet: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: isWide ? 15 : 14),
+                  ),
+                ),
+        );
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+            children: [
+              if (isBot) ...[
+                _buildEmotionAvatar(emotion),
+                const SizedBox(width: 16),
+              ],
+              Flexible(child: bubble),
+              if (isUser) ...[
+                const SizedBox(width: 16),
+                _buildUserAvatar(),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+  Widget _buildEmotionAvatar(String emotion) {
+    final assetName = listeEmotions.contains(emotion) ? emotion : 'naturel';
+    return Container(
+      width: 42,
+      height: 42,
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white.withOpacity(0.08)),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Image.asset('assets/images/$assetName.png', fit: BoxFit.cover),
+      ),
+    );
+  }
+
+  Widget _buildUserAvatar() {
+    return Container(
+      width: 42,
+      height: 42,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFF7C3AED), Color(0xFF2563EB)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.all(Radius.circular(14)),
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        user.username.isNotEmpty ? user.username[0].toUpperCase() : 'U',
+        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 96,
+            height: 96,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.05),
+              borderRadius: BorderRadius.circular(32),
+            ),
+            child: const Icon(Icons.auto_awesome, color: Colors.white70, size: 40),
+          ),
+          const SizedBox(height: 24),
+          const Text(
+            'How can I assist you today?',
+            style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Start by asking a question or describe the context you need help with.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 14),
           ),
         ],
       ),
-    ),
+    );
+  }
 
-
-    // Page de discussion
-      body: Column(
-        mainAxisAlignment: MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          // Barre en haut
-          Row(
-            mainAxisAlignment: MainAxisAlignment.start,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              IconButton(onPressed: openMenu, icon: Icon(Icons.menu, color: Colors.white, size: 50)),
-
-              const Expanded(child: SizedBox()),
-
-              SizedBox(
-                width: MediaQuery.of(context).size.width - 150,
-                height: 50,
-                child: Center(
-                  child: AutoSizeText(
-                    widget.conversation == null ? "" : widget.conversation!.title,
-                    maxLines: 1,
-                    maxFontSize: 40,
-                    minFontSize: 8,
-                    style: const TextStyle(color: Colors.white, fontSize: 40),
+  Widget _buildFilesPreview({required bool isWide}) {
+    return Container(
+      height: 70,
+      margin: EdgeInsets.fromLTRB(isWide ? 36 : 16, 18, isWide ? 36 : 16, 0),
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: files.length,
+        itemBuilder: (context, index) {
+          final file = files[index];
+          return Container(
+            margin: const EdgeInsets.only(right: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.06),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.white.withOpacity(0.08)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.insert_drive_file, color: Colors.white70, size: 20),
+                const SizedBox(width: 12),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 160),
+                  child: Text(
+                    p.basename(file.path),
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500),
                   ),
                 ),
-              ),
-
-              const Expanded(child: SizedBox()),
-              // Bouton de déconnexion
-              IconButton(onPressed: logout, icon: Icon(Icons.logout, color: Colors.white, size: 50)),
-            ],
-          ),
-
-          // Contenu de la discussion
-          if (widget.conversation == null) const Expanded(child: SizedBox()),
-
-          if (widget.conversation == null)
-            const Center(child: Text("Comment puis-je vous aider ?", style: TextStyle(color: Colors.white, fontSize: 32), textAlign: TextAlign.center))
-          else // Liste des messages
-            Expanded(
-              child: SizedBox(
-                width: MediaQuery.of(context).size.width,
-                child: ListView.builder(
-                  controller: _scrollController,
-                  itemCount: widget.conversation?.messages.length,
-                  itemBuilder: (context, index) {
-                    if (widget.conversation?.messages[index][0] == "file") {
-                      return SizedBox.shrink();
-                    }
-                    // Vérifie si le message est de l'utilisateur ou du bot
-                    final isUser = widget.conversation?.messages[index][0] == "user";
-                    final isBot = widget.conversation?.messages[index][0] == "assistant";
-                    final message = widget.conversation?.messages[index][1];
-                    // Vérifie l'émotion
-                    String emotion = "";
-                    if(widget.conversation?.messages[index].length == 3) {
-                      emotion = widget.conversation?.messages[index][2] ?? "naturel";
-                    }
-                    else {
-                      emotion = "naturel";
-                    }
-
-                    final isLoadingMessage = message == "loading";
-
-                    return Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Bot avec émotion connue
-                        if (isBot && listeEmotions.contains(emotion))
-                          Padding(
-                            padding: const EdgeInsets.only(left: 8, top: 8),
-                            child: Image.asset('assets/images/$emotion.png', width: 32),
-                          ),
-                        // Bot avec émotion inconnue --> image naturelle
-                        if(isBot && !listeEmotions.contains(emotion))
-                          Padding(
-                            padding: const EdgeInsets.only(left: 8, top: 8),
-                            child: Image.asset('assets/images/naturel.png', width: 32),
-                          ),
-
-                        // Messages
-                        Expanded(
-                          child: Align(
-                            alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-                            child: Container(
-                              margin: const EdgeInsets.symmetric(vertical: 5, horizontal: 10),
-                              padding: const EdgeInsets.all(10),
-                              constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.7),
-                              decoration: BoxDecoration(color: const Color.fromRGBO(85, 85, 85, 1), borderRadius: BorderRadius.circular(15)),
-                              child:
-                                  isLoadingMessage
-                                      ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                                      :
-                                  // Message traité comme du markdown
-                                  MarkdownBody(
-                                        data: message!,
-                                        selectable: true,
-                                        styleSheet: MarkdownStyleSheet(
-                                            p: const TextStyle(color: Colors.white, fontSize: 14),
-                                            code: const TextStyle(color: Colors.white, fontSize: 14),
-                                            blockquote: const TextStyle(color: Colors.white, fontSize: 14, fontStyle: FontStyle.italic),
-                                            h1: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
-                                            h2: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
-                                            h3: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
-                                            h4: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-                                            h5: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-                                            h6: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
-                                            a: const TextStyle(color: Colors.blue, fontSize: 14, decoration: TextDecoration.underline),
-                                            strong: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
-                                            em: const TextStyle(color: Colors.white, fontSize: 14, fontStyle: FontStyle.italic),
-                                            del: const TextStyle(color: Colors.white, fontSize: 14, decoration: TextDecoration.lineThrough),
-                                            blockquoteDecoration: BoxDecoration(
-                                              color: Colors.black54,
-                                              borderRadius: BorderRadius.circular(10),
-                                            ),
-                                            codeblockDecoration: BoxDecoration(
-                                              color: Colors.black54,
-                                              borderRadius: BorderRadius.circular(10),
-                                            ),
-                                            listBullet: const TextStyle(color: Colors.white, fontSize: 14),
-                                        ),
-                                      ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    );
+                const SizedBox(width: 12),
+                GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      files.removeAt(index);
+                    });
                   },
+                  child: Container(
+                    width: 26,
+                    height: 26,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.close, color: Colors.white, size: 16),
+                  ),
                 ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+  Widget _buildInputBar({required bool isWide}) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(isWide ? 36 : 16, 20, isWide ? 36 : 16, isWide ? 32 : 24),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.05),
+          borderRadius: BorderRadius.circular(32),
+          border: Border.all(color: Colors.white.withOpacity(0.06)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.25),
+              blurRadius: 18,
+              offset: const Offset(0, 12),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            _buildInputIcon(
+              icon: Icons.attachment_outlined,
+              tooltip: 'Attach files',
+              onTap: selectFiles,
+            ),
+            const SizedBox(width: 12),
+            _buildInputIcon(
+              icon: Icons.public,
+              tooltip: 'Toggle web search',
+              onTap: switchResearchMode,
+              isActive: researchMode,
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: TextField(
+                controller: inputController,
+                decoration: InputDecoration(
+                  hintText: 'Type your message... ',
+                  hintStyle: TextStyle(color: Colors.white.withOpacity(0.45)),
+                  border: InputBorder.none,
+                  counterText: '',
+                ),
+                style: const TextStyle(color: Colors.white, fontSize: 15),
+                cursorColor: const Color(0xFF38BDF8),
+                maxLength: 25000,
+                minLines: 1,
+                maxLines: 6,
+                onSubmitted: (_) => send(),
               ),
             ),
-
-          if (widget.conversation == null) const Expanded(child: SizedBox()),
-          const SizedBox(height: 5),
-
-          // Barre de saisie
-          Container(
-            width: MediaQuery.of(context).size.width * 0.8,
-            height: 50,
-            decoration: BoxDecoration(color: const Color.fromRGBO(85, 85, 85, 1), borderRadius: BorderRadius.circular(25)),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.start,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                // Boutons de la barre de saisie
-                IconButton(onPressed: selectFiles, icon: Icon(Icons.add, color: Colors.black45, size: 30)),
-                IconButton(onPressed: switchResearchMode, icon: Icon(Icons.language, color: researchMode ? Colors.white70 : Colors.black45, size: 30)),
-
-                // Champ de saisie de texte
-                Expanded(
-                  child: TextField(
-                    controller: inputController,
-                    decoration: InputDecoration(hintText: "Posez votre question...", hintStyle: const TextStyle(color: Colors.white30), border: InputBorder.none, counterText: ""),
-                    style: const TextStyle(color: Colors.white, fontSize: 16),
-                    cursorColor: Colors.white,
-                    maxLength: 25000,
-                    onSubmitted: (value) {
-                      // Envoie le message lorsque l'utilisateur appuie sur "Entrée"
-                      send();
-                    },
-                  ),
-                ),
-                // Bouton microphone pour la reconnaissance vocale
-                if(Platform.isAndroid)
-                  IconButton(onPressed: () {
-                    if(_speechEnabled && !_isListening) {
+            if (Platform.isAndroid)
+              Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: _buildInputIcon(
+                  icon: isListeningMic ? Icons.stop : Icons.mic,
+                  tooltip: isListeningMic ? 'Stop listening' : 'Start voice input',
+                  onTap: () {
+                    if (_speechEnabled && !_isListening) {
                       setState(() {
                         isListeningMic = true;
                       });
-                      _currentText = inputController.text; // Sauvegarde le texte actuel
+                      _currentText = inputController.text;
                       _startListening();
-                    } else if(_speechEnabled && _isListening) {
+                    } else if (_speechEnabled && _isListening) {
                       setState(() {
                         isListeningMic = false;
                       });
                       _stopListening();
                     }
-
-                  }, icon: Icon(Icons.mic, color: isListeningMic ? Colors.white54 : Colors.black45, size: 30)),
-                // Bouton d'envoi du message
-                IconButton(onPressed: send, icon: const Icon(Icons.send_rounded, color: Colors.black45, size: 30)),
-              ],
-            ),
-          ),
-
-          // Liste des fichiers sélectionnés
-          files.isEmpty
-              ? const SizedBox(height: 60)
-              : Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: SizedBox(
-                  height: 50,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: files.length,
-                    itemBuilder: (context, index) {
-                      return Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 5),
-                        padding: const EdgeInsets.symmetric(horizontal: 10),
-                        decoration: BoxDecoration(color: const Color.fromRGBO(85, 85, 85, 1), borderRadius: BorderRadius.circular(15)),
-                        child: SizedBox(
-                          width: 200,
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              Expanded(child: Text(p.basename(files[index].path), style: const TextStyle(color: Colors.white, fontSize: 14), overflow: TextOverflow.ellipsis)),
-                              IconButton(
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(),
-                                onPressed: () {
-                                  setState(() {
-                                    files.removeAt(index);
-                                  });
-                                },
-                                icon: const Icon(Icons.close, color: Colors.white, size: 20),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
+                  },
+                  isActive: isListeningMic,
                 ),
               ),
+            GestureDetector(
+              onTap: send,
+              child: Container(
+                width: 52,
+                height: 52,
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Color(0xFF7C3AED), Color(0xFF2563EB)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.send_rounded, color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInputIcon({required IconData icon, required VoidCallback onTap, String? tooltip, bool isActive = false}) {
+    final iconWidget = Icon(icon, color: isActive ? const Color(0xFF38BDF8) : Colors.white70);
+    final content = InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        width: 42,
+        height: 42,
+        decoration: BoxDecoration(
+          color: isActive ? const Color(0xFF0B2948) : Colors.white.withOpacity(0.06),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: isActive ? const Color(0xFF38BDF8) : Colors.white.withOpacity(0.06)),
+        ),
+        child: Center(child: iconWidget),
+      ),
+    );
+
+    if (tooltip is String) {
+      return Tooltip(message: tooltip, child: content);
+    }
+    return content;
+  }
+
+  Widget _buildHeaderAction({required IconData icon, VoidCallback? onTap, String? tooltip}) {
+    final action = InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.06),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: Colors.white.withOpacity(0.08)),
+        ),
+        child: Icon(icon, color: Colors.white70),
+      ),
+    );
+    if (tooltip != null) {
+      return Tooltip(message: tooltip, child: action);
+    }
+    return action;
+  }
+
+  Widget _buildStatusChip(String label) {
+    return Container(
+      margin: const EdgeInsets.only(right: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withOpacity(0.1)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(
+            width: 14,
+            height: 14,
+            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white70),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            label,
+            style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600),
+          ),
         ],
       ),
     );
   }
+
+  String _formatDate(DateTime date) {
+    final now = DateTime.now();
+    final difference = now.difference(date);
+    if (difference.inMinutes < 1) {
+      return 'Just now';
+    } else if (difference.inHours < 1) {
+      return '${difference.inMinutes} min ago';
+    } else if (difference.inDays < 1) {
+      return '${difference.inHours} h ago';
+    }
+    return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+  }
 }
-
-
-
-
-
-
-
-
-
-
