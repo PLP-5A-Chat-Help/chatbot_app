@@ -16,6 +16,7 @@ import 'package:speech_to_text/speech_to_text.dart';
 import '../model/conversation_subject.dart';
 import '../model/conversation.dart';
 import '../variables.dart';
+import '../widgets/primary_sidebar.dart';
 
 /* ----------------------------------
   Projet 4A : Chatbot App
@@ -96,6 +97,18 @@ class _DiscussionPageState extends State<DiscussionPage> {
     super.dispose();
   }
 
+  void _handlePrimaryNavigation(int index) {
+    if (!mounted) return;
+    switch (index) {
+      case 0:
+        break;
+      case 1:
+        Navigator.pushReplacementNamed(context, '/mail');
+        break;
+      default:
+        break;
+    }
+  }
 
   /// Fonction pour descendre en bas de la liste des messages
   void _scrollToBottom() {
@@ -529,7 +542,10 @@ class _DiscussionPageState extends State<DiscussionPage> {
             child: isWide
                 ? Row(
                     children: [
-                      _buildPrimarySidebar(),
+                      PrimarySidebar(
+                        selectedIndex: 0,
+                        onDestinationSelected: _handlePrimaryNavigation,
+                      ),
                       _buildConversationSidebar(),
                       Expanded(child: _buildChatSection(isWide: true)),
                     ],
@@ -541,71 +557,6 @@ class _DiscussionPageState extends State<DiscussionPage> {
     );
   }
 
-  Widget _buildPrimarySidebar() {
-    return Container(
-      width: 88,
-      decoration: BoxDecoration(
-        color: const Color(0xFF0F172A),
-        border: Border(
-          right: BorderSide(color: Colors.white.withOpacity(0.05)),
-        ),
-      ),
-      child: Column(
-        children: [
-          const SizedBox(height: 24),
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: const Color(0xFF1F2937),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(10),
-              child: Image.asset('assets/logo.png', fit: BoxFit.contain),
-            ),
-          ),
-          const SizedBox(height: 32),
-          _buildSidebarIcon(icon: Icons.chat_bubble_outline, active: true),
-          _buildSidebarIcon(icon: Icons.folder_copy_outlined),
-          _buildSidebarIcon(icon: Icons.analytics_outlined),
-          _buildSidebarIcon(icon: Icons.settings_outlined),
-          const Spacer(),
-          Container(
-            margin: const EdgeInsets.only(bottom: 24),
-            child: CircleAvatar(
-              radius: 22,
-              backgroundColor: const Color(0xFF1F2937),
-              child: Text(
-                user.username.isNotEmpty ? user.username[0].toUpperCase() : '?',
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSidebarIcon({required IconData icon, bool active = false}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(18),
-        onTap: () {},
-        child: Container(
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-            color: active ? const Color(0xFF1F2937) : Colors.transparent,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: active ? Colors.white.withOpacity(0.25) : Colors.white.withOpacity(0.06)),
-          ),
-          child: Icon(icon, color: active ? Colors.white : Colors.white60),
-        ),
-      ),
-    );
-  }
   Widget _buildConversationSidebar({bool isDrawer = false}) {
     return Container(
       width: isDrawer ? double.infinity : 320,
