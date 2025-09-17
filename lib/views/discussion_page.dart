@@ -110,7 +110,6 @@ class _DiscussionPageState extends State<DiscussionPage> {
     }
   }
 
-
   /// Fonction pour descendre en bas de la liste des messages
   void _scrollToBottom() {
     if (_scrollController.hasClients) {
