@@ -1,8 +1,6 @@
 import 'dart:io';
 
-import 'package:chatbot_app/views/discussion_page.dart';
 import 'package:chatbot_app/views/home_page.dart';
-import 'package:chatbot_app/views/mail_page.dart';
 import 'package:flutter/material.dart';
 import 'package:window_size/window_size.dart';
 
@@ -39,10 +37,6 @@ class MyApp extends StatelessWidget {
 
         // Page d'acceuil
         home: const HomePage(),
-        routes: {
-          '/discussion': (context) => DiscussionPage.empty(),
-          '/mail': (context) => const MailPage(),
-        },
       ),
     );
 
