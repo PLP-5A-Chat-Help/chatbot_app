@@ -573,8 +573,6 @@ class _MailReportDialogState extends State<_MailReportDialog> {
     return SfPdfViewer.memory(
       _pdfBytes!,
       canShowPaginationDialog: false,
-      maxZoomLevel: 3,
-      minZoomLevel: 1,
       pageLayoutMode: PdfPageLayoutMode.single,
     );
   }
