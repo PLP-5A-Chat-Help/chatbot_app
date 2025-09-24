@@ -567,8 +567,11 @@ class _MailReportDialogState extends State<_MailReportDialog> {
         ),
       );
     }
-
-    return SfPdfViewer.memory(_pdfBytes!);
+    return SfPdfViewer.memory(
+      _pdfBytes!,
+      canShowPaginationDialog: false,
+      pageLayoutMode: PdfPageLayoutMode.single,
+    );
   }
 
   String _buildFileName(String subject) {

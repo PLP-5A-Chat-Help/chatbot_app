@@ -39,6 +39,10 @@ class _HomePageState extends State<HomePage> {
 
   /// Méthode pour se connecter
   void connexion() async {
+    Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => DiscussionPage.empty()),
+        );
     // Vide le message d'erreur
     setState(() {
       messageErreur = "";
@@ -80,10 +84,7 @@ class _HomePageState extends State<HomePage> {
         passwordController.clear();
 
         // Navigue vers la page de discussion
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => DiscussionPage.empty()),
-        );
+        
       } else {
         // Affiche un message d'erreur si la connexion échoue (erreur envoyée par l'API)
         //print("Erreur lors de la connexion : ${response.statusCode}");
