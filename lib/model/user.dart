@@ -14,11 +14,19 @@ class User {
   String accessToken;
   String tokenType;
   String username;
+  String firstName;
+  String lastName;
+  String email;
+  String? avatarPath;
 
   User({
     required this.accessToken,
     required this.tokenType,
     required this.username,
+    required this.firstName,
+    required this.lastName,
+    required this.email,
+    required this.avatarPath,
   });
 
   void setAccessToken(String token) {
@@ -33,9 +41,27 @@ class User {
     username = name;
   }
 
+  void setNames({String? first, String? last}) {
+    if (first != null) firstName = first;
+    if (last != null) lastName = last;
+  }
+
+  void setEmail(String value) {
+    email = value;
+  }
+
+  void setAvatarPath(String? path) {
+    avatarPath = path;
+  }
+
   void clear() {
     accessToken = '';
     tokenType = '';
+    username = 'Utilisateur';
+    firstName = '';
+    lastName = '';
+    email = '';
+    avatarPath = null;
   }
 
   String getAccessToken() {
