@@ -36,6 +36,7 @@ class User {
   void clear() {
     accessToken = '';
     tokenType = '';
+    username = 'Utilisateur';
   }
 
   String getAccessToken() {
