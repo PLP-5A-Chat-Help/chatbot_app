@@ -11,7 +11,7 @@ import 'package:chatbot_app/model/user.dart';
 String urlPrefix = "https://192.168.100.1:8000"; // en HTTPS
 
 User user = User(
-  username: '',
+  username: 'Utilisateur',
   accessToken: '',
   tokenType: '',
 );
