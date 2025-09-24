@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
+import 'mails_page.dart';
 
 import 'package:path/path.dart' as p;
 import 'package:http/http.dart' as http;
@@ -567,7 +568,15 @@ class _DiscussionPageState extends State<DiscussionPage> {
           ),
           const SizedBox(height: 32),
           _buildSidebarIcon(icon: Icons.chat_bubble_outline, active: true),
-          _buildSidebarIcon(icon: Icons.folder_copy_outlined),
+          _buildSidebarIcon(
+            icon: Icons.folder_copy_outlined,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const MailsPage()),
+              );
+            },
+          ),
           _buildSidebarIcon(icon: Icons.analytics_outlined),
           _buildSidebarIcon(icon: Icons.settings_outlined),
           const Spacer(),
@@ -587,12 +596,16 @@ class _DiscussionPageState extends State<DiscussionPage> {
     );
   }
 
-  Widget _buildSidebarIcon({required IconData icon, bool active = false}) {
+  Widget _buildSidebarIcon({
+    required IconData icon,
+    bool active = false,
+    VoidCallback? onTap,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: InkWell(
         borderRadius: BorderRadius.circular(18),
-        onTap: () {},
+        onTap: onTap,
         child: Container(
           width: 48,
           height: 48,
