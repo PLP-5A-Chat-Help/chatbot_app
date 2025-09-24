@@ -7,15 +7,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
+import 'mails_page.dart';
+import 'settings_page.dart';
 
 import 'package:path/path.dart' as p;
 import 'package:http/http.dart' as http;
 import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:speech_to_text/speech_to_text.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../model/conversation_subject.dart';
 import '../model/conversation.dart';
+import '../model/mail_analysis.dart';
 import '../variables.dart';
+import '../utils/mail_report_generator.dart';
+import '../utils/app_palette.dart';
+import 'widgets/primary_navigation.dart';
 
 /* ----------------------------------
   Projet 4A : Chatbot App
@@ -26,11 +33,12 @@ import '../variables.dart';
 /// Page de discussion
 /// Cette page permet à l'utilisateur de discuter avec le chatbot.
 class DiscussionPage extends StatefulWidget {
-  DiscussionPage({super.key, required this.titre, required this.conversation});
-  DiscussionPage.empty({super.key}) : titre = "", conversation = null;
+  DiscussionPage({super.key, required this.titre, required this.conversation, this.initialReport});
+  DiscussionPage.empty({super.key, this.initialReport}) : titre = "", conversation = null;
 
   final String titre; // Titre de la discussion
   Conversation? conversation;
+  final MailAnalysis? initialReport;
 
   @override
   State<DiscussionPage> createState() => _DiscussionPageState();
@@ -46,6 +54,12 @@ class _DiscussionPageState extends State<DiscussionPage> {
   bool researchMode = false; // true = recherche web, false = recherche locale
   List<File> files = []; // Liste des fichiers sélectionnés
   bool isLoading = false; // Indique si une requête est en cours (animation)
+  
+  void _handleUserUpdated() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
 
   Future<List<ConversationSubject>>? drawerData; // Données pour le Drawer (liste des sujets de conversation)
 
@@ -64,6 +78,8 @@ class _DiscussionPageState extends State<DiscussionPage> {
   void initState() {
     super.initState();
     _scrollController = ScrollController();
+    inputController.addListener(_onInputChanged);
+    user.addListener(_handleUserUpdated);
 
     drawerData = loadSubjects();
     subjectSearchController.addListener(() {
@@ -82,6 +98,12 @@ class _DiscussionPageState extends State<DiscussionPage> {
       launchConversation(); // Charge la conversation (sauf si c'est une nouvelle conversation)
     }
 
+    if (widget.initialReport != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _prepareInitialReport(widget.initialReport!);
+      });
+    }
+
     // Charge le SpeechToText si l'application est sur Android
     if(Platform.isAndroid) {
       _initSpeech();
@@ -90,11 +112,20 @@ class _DiscussionPageState extends State<DiscussionPage> {
 
   @override
   void dispose() {
+    inputController.removeListener(_onInputChanged);
     inputController.dispose();
     subjectSearchController.dispose();
     _scrollController.dispose();
+    user.removeListener(_handleUserUpdated);
     super.dispose();
   }
+
+  void _onInputChanged() {
+    if (!mounted) return;
+    setState(() {});
+  }
+
+  bool get _canSendMessage => inputController.text.trim().isNotEmpty && !isLoading;
 
 
   /// Fonction pour descendre en bas de la liste des messages
@@ -104,6 +135,62 @@ class _DiscussionPageState extends State<DiscussionPage> {
         _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
       });
     }
+  }
+
+  Future<void> _prepareInitialReport(MailAnalysis mail) async {
+    try {
+      final bytes = await MailReportGenerator.buildReport(mail);
+      final directory = await getTemporaryDirectory();
+      final file = File(p.join(directory.path, _buildReportFileName(mail.subject)));
+      await file.writeAsBytes(bytes, flush: true);
+      if (!mounted) return;
+      setState(() {
+        files.add(file);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Rapport "${mail.subject}" attaché à la conversation.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Impossible de préparer le rapport : $e')),
+      );
+    }
+  }
+
+  void _openMailsPage() {
+    final navigator = Navigator.of(context);
+    navigator.push(
+      PageRouteBuilder(
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
+        pageBuilder: (_, __, ___) => MailsPage(
+          onStartConversation: (mailContext, mail) {
+            Navigator.of(mailContext).push(
+              PageRouteBuilder(
+                transitionDuration: Duration.zero,
+                reverseTransitionDuration: Duration.zero,
+                pageBuilder: (_, __, ___) => DiscussionPage(
+                  titre: mail.subject,
+                  conversation: null,
+                  initialReport: mail,
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  void _openSettingsPage() {
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
+        pageBuilder: (_, __, ___) => const SettingsPage(),
+      ),
+    );
   }
 
   // ---------------------------------- Speech-to-text ----------------------------------
@@ -304,6 +391,10 @@ class _DiscussionPageState extends State<DiscussionPage> {
 
   /// Envoie le message saisi par l'utilisateur
   void send() async {
+    final message = inputController.text.trim();
+    if (message.isEmpty || isLoading) {
+      return;
+    }
     setState(() {
       if (widget.conversation == null) {
         // Si la conversation est nulle, on crée une nouvelle conversation
@@ -311,12 +402,12 @@ class _DiscussionPageState extends State<DiscussionPage> {
           id: "-1",
           title: "",
           messages: [
-            ["user", inputController.text, ""],
+            ["user", message, ""],
           ],
         );
       } else {
         // Sinon, on ajoute le message à la conversation existante
-        widget.conversation?.addMessage("user", inputController.text, "");
+        widget.conversation?.addMessage("user", message, "");
       }
       isLoading = true;
       widget.conversation?.messages.add(["system", "loading", ""]); // message temporaire pour l'animation
@@ -328,7 +419,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
 
     final request =
         http.MultipartRequest('POST', uri)
-          ..fields['content'] = inputController.text
+          ..fields['content'] = message
           ..fields['use_web'] = researchMode.toString()
           ..fields['conversation_id'] = (widget.conversation?.id).toString()
           ..headers['Authorization'] = 'Bearer ${user.accessToken}';
@@ -507,19 +598,23 @@ class _DiscussionPageState extends State<DiscussionPage> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     return LayoutBuilder(
       builder: (context, constraints) {
         final isWide = constraints.maxWidth >= 1000;
         return Scaffold(
           key: scaffoldKey,
-          backgroundColor: const Color(0xFF0B101A),
+          backgroundColor: palette.background,
           drawer: isWide
               ? null
               : Drawer(
                   width: 320,
-                  backgroundColor: const Color(0xFF111827),
+                  backgroundColor: palette.surface,
                   child: SafeArea(
-                    child: _buildConversationSidebar(isDrawer: true),
+                    child: _buildConversationSidebar(
+                      palette: palette,
+                      isDrawer: true,
+                    ),
                   ),
                 ),
           onDrawerChanged: (isOpened) {
@@ -529,91 +624,55 @@ class _DiscussionPageState extends State<DiscussionPage> {
             child: isWide
                 ? Row(
                     children: [
-                      _buildPrimarySidebar(),
-                      _buildConversationSidebar(),
-                      Expanded(child: _buildChatSection(isWide: true)),
+                      PrimaryNavigation(
+                        palette: palette,
+                        activeIndex: 0,
+                        onChatPressed: null,
+                        onMailsPressed: _openMailsPage,
+                        onSettingsPressed: _openSettingsPage,
+                      ),
+                      _buildConversationSidebar(palette: palette),
+                      Expanded(
+                        child: _buildChatSection(
+                          isWide: true,
+                          palette: palette,
+                        ),
+                      ),
                     ],
                   )
-                : _buildChatSection(isWide: false),
+                : Column(
+                    children: [
+                      PrimaryNavigation(
+                        palette: palette,
+                        activeIndex: 0,
+                        isHorizontal: true,
+                        onChatPressed: null,
+                        onMailsPressed: _openMailsPage,
+                        onSettingsPressed: _openSettingsPage,
+                      ),
+                      Expanded(
+                        child: _buildChatSection(
+                          isWide: false,
+                          palette: palette,
+                        ),
+                      ),
+                    ],
+                  ),
           ),
         );
       },
     );
   }
-
-  Widget _buildPrimarySidebar() {
-    return Container(
-      width: 88,
-      decoration: BoxDecoration(
-        color: const Color(0xFF0F172A),
-        border: Border(
-          right: BorderSide(color: Colors.white.withOpacity(0.05)),
-        ),
-      ),
-      child: Column(
-        children: [
-          const SizedBox(height: 24),
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: const Color(0xFF1F2937),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(10),
-              child: Image.asset('assets/logo.png', fit: BoxFit.contain),
-            ),
-          ),
-          const SizedBox(height: 32),
-          _buildSidebarIcon(icon: Icons.chat_bubble_outline, active: true),
-          _buildSidebarIcon(icon: Icons.folder_copy_outlined),
-          _buildSidebarIcon(icon: Icons.analytics_outlined),
-          _buildSidebarIcon(icon: Icons.settings_outlined),
-          const Spacer(),
-          Container(
-            margin: const EdgeInsets.only(bottom: 24),
-            child: CircleAvatar(
-              radius: 22,
-              backgroundColor: const Color(0xFF1F2937),
-              child: Text(
-                user.username.isNotEmpty ? user.username[0].toUpperCase() : '?',
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSidebarIcon({required IconData icon, bool active = false}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(18),
-        onTap: () {},
-        child: Container(
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-            color: active ? const Color(0xFF1F2937) : Colors.transparent,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: active ? Colors.white.withOpacity(0.25) : Colors.white.withOpacity(0.06)),
-          ),
-          child: Icon(icon, color: active ? Colors.white : Colors.white60),
-        ),
-      ),
-    );
-  }
-  Widget _buildConversationSidebar({bool isDrawer = false}) {
+  Widget _buildConversationSidebar({required AppPalette palette, bool isDrawer = false}) {
     return Container(
       width: isDrawer ? double.infinity : 320,
       decoration: BoxDecoration(
-        color: const Color(0xFF111827),
-        border: Border(
-          right: BorderSide(color: Colors.white.withOpacity(isDrawer ? 0 : 0.05)),
-        ),
+        color: palette.surface,
+        border: isDrawer
+            ? null
+            : Border(
+                right: BorderSide(color: palette.border),
+              ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -623,19 +682,19 @@ class _DiscussionPageState extends State<DiscussionPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'My Chats',
+                Text(
+                  'Mes discussions',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: palette.textPrimary,
                     fontSize: 22,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Stay on top of your conversations',
+                  'Retrouvez facilement toutes vos conversations',
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.6),
+                    color: palette.textSecondary,
                     fontSize: 13,
                   ),
                 ),
@@ -644,22 +703,26 @@ class _DiscussionPageState extends State<DiscussionPage> {
                   onTap: () {
                     Navigator.pushReplacement(
                       context,
-                      MaterialPageRoute(builder: (context) => DiscussionPage.empty()),
+                      PageRouteBuilder(
+                        transitionDuration: Duration.zero,
+                        reverseTransitionDuration: Duration.zero,
+                        pageBuilder: (_, __, ___) => DiscussionPage.empty(),
+                      ),
                     );
                   },
                   borderRadius: BorderRadius.circular(20),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                     decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF2563EB), Color(0xFF7C3AED)],
+                      gradient: LinearGradient(
+                        colors: [palette.primary, palette.secondary],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF2563EB).withOpacity(0.3),
+                          color: palette.primary.withOpacity(0.3),
                           blurRadius: 16,
                           offset: const Offset(0, 8),
                         ),
@@ -671,16 +734,20 @@ class _DiscussionPageState extends State<DiscussionPage> {
                           width: 36,
                           height: 36,
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.18),
+                            color: palette.accentTextOnPrimary.withOpacity(0.18),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: const Icon(Icons.add, color: Colors.white),
                         ),
                         const SizedBox(width: 16),
-                        const Expanded(
+                        Expanded(
                           child: Text(
-                            'New conversation',
-                            style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
+                            'Nouvelle discussion',
+                            style: TextStyle(
+                              color: palette.accentTextOnPrimary,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
                       ],
@@ -694,23 +761,23 @@ class _DiscussionPageState extends State<DiscussionPage> {
             padding: const EdgeInsets.symmetric(horizontal: 24),
             child: Container(
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.06),
+                color: palette.mutedSurface,
                 borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: Colors.white.withOpacity(0.08)),
+                border: Border.all(color: palette.border),
               ),
               child: Row(
                 children: [
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 16),
-                    child: Icon(Icons.search, color: Colors.white54),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Icon(Icons.search, color: palette.textMuted),
                   ),
                   Expanded(
                     child: TextField(
                       controller: subjectSearchController,
-                      style: const TextStyle(color: Colors.white),
+                      style: TextStyle(color: palette.textPrimary),
                       decoration: InputDecoration(
-                        hintText: 'Search conversations',
-                        hintStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
+                        hintText: 'Rechercher une conversation',
+                        hintStyle: TextStyle(color: palette.textMuted),
                         border: InputBorder.none,
                       ),
                     ),
@@ -720,7 +787,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
                       onPressed: () {
                         subjectSearchController.clear();
                       },
-                      icon: const Icon(Icons.close, color: Colors.white54),
+                      icon: Icon(Icons.close, color: palette.textMuted),
                     ),
                 ],
               ),
@@ -732,8 +799,8 @@ class _DiscussionPageState extends State<DiscussionPage> {
               future: drawerData,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(
-                    child: CircularProgressIndicator(color: Colors.white24),
+                  return Center(
+                    child: CircularProgressIndicator(color: palette.primary.withOpacity(0.5)),
                   );
                 } else if (snapshot.hasError) {
                   return Center(
@@ -741,7 +808,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
                       padding: const EdgeInsets.symmetric(horizontal: 24),
                       child: Text(
                         '${snapshot.error}',
-                        style: const TextStyle(color: Colors.white70, fontSize: 14),
+                        style: TextStyle(color: palette.textSecondary, fontSize: 14),
                         textAlign: TextAlign.center,
                       ),
                     ),
@@ -749,8 +816,8 @@ class _DiscussionPageState extends State<DiscussionPage> {
                 } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
                   return Center(
                     child: Text(
-                      'No conversations yet',
-                      style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 15),
+                      'Aucune conversation pour le moment',
+                      style: TextStyle(color: palette.textSecondary, fontSize: 15),
                     ),
                   );
                 }
@@ -764,8 +831,8 @@ class _DiscussionPageState extends State<DiscussionPage> {
                 if (filteredSubjects.isEmpty) {
                   return Center(
                     child: Text(
-                      'No conversations found',
-                      style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 15),
+                      'Aucune conversation correspondante',
+                      style: TextStyle(color: palette.textSecondary, fontSize: 15),
                     ),
                   );
                 }
@@ -779,12 +846,21 @@ class _DiscussionPageState extends State<DiscussionPage> {
                     final isActive = widget.conversation?.id == subject.id;
                     final formattedDate = _formatDate(subject.lastUpdate);
 
+                    final backgroundColor = isActive
+                        ? palette.primary.withOpacity(0.16)
+                        : palette.surface;
+                    final borderColor = isActive
+                        ? palette.primary.withOpacity(0.35)
+                        : palette.border;
+
                     return GestureDetector(
                       onTap: () {
                         Navigator.pushReplacement(
                           context,
-                          MaterialPageRoute(
-                            builder: (context) => DiscussionPage(
+                          PageRouteBuilder(
+                            transitionDuration: Duration.zero,
+                            reverseTransitionDuration: Duration.zero,
+                            pageBuilder: (_, __, ___) => DiscussionPage(
                               titre: subject.titre,
                               conversation: Conversation(
                                 id: subject.id,
@@ -798,9 +874,9 @@ class _DiscussionPageState extends State<DiscussionPage> {
                       child: Container(
                         padding: const EdgeInsets.all(18),
                         decoration: BoxDecoration(
-                          color: isActive ? Colors.white.withOpacity(0.1) : Colors.white.withOpacity(0.03),
+                          color: backgroundColor,
                           borderRadius: BorderRadius.circular(22),
-                          border: Border.all(color: isActive ? Colors.white.withOpacity(0.3) : Colors.transparent),
+                          border: Border.all(color: borderColor),
                         ),
                         child: Row(
                           children: [
@@ -808,10 +884,10 @@ class _DiscussionPageState extends State<DiscussionPage> {
                               width: 42,
                               height: 42,
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.08),
+                                color: palette.mutedSurface,
                                 borderRadius: BorderRadius.circular(14),
                               ),
-                              child: const Icon(Icons.forum_outlined, color: Colors.white70),
+                              child: Icon(Icons.forum_outlined, color: palette.textMuted),
                             ),
                             const SizedBox(width: 16),
                             Expanded(
@@ -820,14 +896,18 @@ class _DiscussionPageState extends State<DiscussionPage> {
                                 children: [
                                   Text(
                                     subject.titre,
-                                    style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
+                                    style: TextStyle(
+                                      color: palette.textPrimary,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
                                     formattedDate,
-                                    style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 12),
+                                    style: TextStyle(color: palette.textMuted, fontSize: 12),
                                   ),
                                 ],
                               ),
@@ -842,10 +922,10 @@ class _DiscussionPageState extends State<DiscussionPage> {
                                 width: 36,
                                 height: 36,
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.08),
+                                  color: palette.mutedSurface,
                                   borderRadius: BorderRadius.circular(12),
                                 ),
-                                child: const Icon(Icons.delete_outline, color: Colors.white70, size: 20),
+                                child: Icon(Icons.delete_outline, color: palette.textMuted, size: 20),
                               ),
                             ),
                           ],
@@ -862,43 +942,51 @@ class _DiscussionPageState extends State<DiscussionPage> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.03),
+                color: palette.mutedSurface,
                 borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: Colors.white.withOpacity(0.06)),
+                border: Border.all(color: palette.border),
               ),
-              child: Row(
-                children: [
-                  CircleAvatar(
-                    radius: 20,
-                    backgroundColor: const Color(0xFF1F2937),
-                    child: Text(
-                      user.username.isNotEmpty ? user.username[0].toUpperCase() : '?',
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          user.username,
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+              child: AnimatedBuilder(
+                animation: user,
+                builder: (context, _) {
+                  final avatarImage = resolveAvatarImage(user.avatarPath);
+                  final initials = user.username.isNotEmpty ? user.username[0].toUpperCase() : 'U';
+                  return Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 20,
+                        backgroundColor: palette.background,
+                        backgroundImage: avatarImage,
+                        child: avatarImage == null
+                            ? Text(
+                                initials,
+                                style: TextStyle(
+                                  color: palette.textPrimary,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              )
+                            : null,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              user.username,
+                              style: TextStyle(color: palette.textPrimary, fontWeight: FontWeight.w600),
+                            ),
+                            Text(
+                              'Session active',
+                              style: TextStyle(color: palette.textMuted, fontSize: 12),
+                            ),
+                          ],
                         ),
-                        Text(
-                          'Active session',
-                          style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 12),
-                        ),
-                      ],
-                    ),
-                  ),
-                  _buildHeaderAction(
-                    icon: Icons.logout,
-                    tooltip: 'Log out',
-                    onTap: logout,
-                  ),
-                ],
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
           ),
@@ -906,19 +994,13 @@ class _DiscussionPageState extends State<DiscussionPage> {
       ),
     );
   }
-  Widget _buildChatSection({required bool isWide}) {
+  Widget _buildChatSection({required bool isWide, required AppPalette palette}) {
     final conversationTitle = widget.conversation?.title.isNotEmpty == true
         ? widget.conversation!.title
-        : (widget.titre.isNotEmpty ? widget.titre : 'New conversation');
+        : (widget.titre.isNotEmpty ? widget.titre : 'Nouvelle conversation');
 
     return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xFF0B101A), Color(0xFF111A2C)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
+      color: palette.background,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -932,15 +1014,16 @@ class _DiscussionPageState extends State<DiscussionPage> {
               children: [
                 if (!isWide)
                   _buildHeaderAction(
+                    palette,
                     icon: Icons.menu,
-                    tooltip: 'Open conversations',
+                    tooltip: 'Ouvrir les conversations',
                     onTap: openMenu,
                   )
                 else
                   CircleAvatar(
                     radius: 24,
-                    backgroundColor: const Color(0xFF1F2937),
-                    child: const Icon(Icons.warning_amber_rounded, color: Colors.white70),
+                    backgroundColor: palette.mutedSurface,
+                    child: Icon(Icons.warning_amber_rounded, color: palette.warning),
                   ),
                 SizedBox(width: isWide ? 20 : 16),
                 Expanded(
@@ -951,16 +1034,18 @@ class _DiscussionPageState extends State<DiscussionPage> {
                       Text(
                         conversationTitle,
                         style: TextStyle(
-                          color: Colors.white,
+                          color: palette.textPrimary,
                           fontSize: isWide ? 24 : 20,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        researchMode ? 'Web search enabled' : 'Local knowledge base',
+                        researchMode
+                            ? 'Recherche web activée'
+                            : 'Base de connaissances locale',
                         style: TextStyle(
-                          color: Colors.white.withOpacity(0.6),
+                          color: palette.textSecondary,
                           fontSize: 13,
                         ),
                       ),
@@ -968,22 +1053,17 @@ class _DiscussionPageState extends State<DiscussionPage> {
                   ),
                 ),
                 if (isLoading)
-                  _buildStatusChip('Generating response...'),
+                  _buildStatusChip(palette, 'Réponse en cours...'),
                 if (!isWide) const SizedBox(width: 8),
                 _buildHeaderAction(
+                  palette,
                   icon: Icons.refresh,
-                  tooltip: 'Reload conversations',
+                  tooltip: 'Rafraîchir les conversations',
                   onTap: () {
                     setState(() {
                       drawerData = loadSubjects();
                     });
                   },
-                ),
-                if (isWide) const SizedBox(width: 12),
-                _buildHeaderAction(
-                  icon: Icons.logout,
-                  tooltip: 'Log out',
-                  onTap: logout,
                 ),
               ],
             ),
@@ -993,36 +1073,36 @@ class _DiscussionPageState extends State<DiscussionPage> {
               margin: EdgeInsets.symmetric(horizontal: isWide ? 36 : 16),
               padding: EdgeInsets.all(isWide ? 28 : 18),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.03),
+                color: palette.surface,
                 borderRadius: BorderRadius.circular(isWide ? 30 : 22),
-                border: Border.all(color: Colors.white.withOpacity(0.05)),
+                border: Border.all(color: palette.border),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.25),
+                    color: palette.shadow,
                     blurRadius: 24,
-                    offset: const Offset(0, 18),
+                    offset: const Offset(0, 12),
                   ),
                 ],
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(isWide ? 24 : 18),
                 child: Container(
-                  color: Colors.black.withOpacity(0.2),
+                  color: palette.background,
                   child: widget.conversation == null
-                      ? _buildEmptyState()
-                      : _buildMessagesList(isWide: isWide),
+                      ? _buildEmptyState(palette: palette)
+                      : _buildMessagesList(isWide: isWide, palette: palette),
                 ),
               ),
             ),
           ),
-          if (files.isNotEmpty) _buildFilesPreview(isWide: isWide),
-          _buildInputBar(isWide: isWide),
+          if (files.isNotEmpty) _buildFilesPreview(isWide: isWide, palette: palette),
+          _buildInputBar(isWide: isWide, palette: palette),
         ],
       ),
     );
   }
 
-  Widget _buildMessagesList({required bool isWide}) {
+  Widget _buildMessagesList({required bool isWide, required AppPalette palette}) {
     return ListView.builder(
       controller: _scrollController,
       padding: EdgeInsets.symmetric(horizontal: isWide ? 24 : 16, vertical: isWide ? 24 : 20),
@@ -1058,14 +1138,14 @@ class _DiscussionPageState extends State<DiscussionPage> {
                     end: Alignment.bottomRight,
                   )
                 : null,
-            color: isUser ? null : Colors.white.withOpacity(0.05),
+            color: isUser ? null : palette.mutedSurface,
             borderRadius: BorderRadius.only(
               topLeft: const Radius.circular(22),
               topRight: const Radius.circular(22),
               bottomLeft: Radius.circular(isUser ? 22 : 6),
               bottomRight: Radius.circular(isUser ? 6 : 22),
             ),
-            border: Border.all(color: Colors.white.withOpacity(isUser ? 0.0 : 0.05)),
+            border: Border.all(color: isUser ? Colors.transparent : palette.border),
             boxShadow: [
               if (isUser)
                 const BoxShadow(
@@ -1075,46 +1155,67 @@ class _DiscussionPageState extends State<DiscussionPage> {
                 )
               else
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.25),
+                  color: palette.shadow,
                   blurRadius: 16,
                   offset: const Offset(0, 10),
                 ),
             ],
           ),
           child: isLoadingMessage
-              ? const SizedBox(
+              ? SizedBox(
                   height: 24,
                   width: 24,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  child: CircularProgressIndicator(strokeWidth: 2, color: palette.primary),
                 )
               : MarkdownBody(
                   data: messageContent,
                   selectable: true,
                   styleSheet: MarkdownStyleSheet(
-                    p: TextStyle(color: Colors.white.withOpacity(0.92), fontSize: isWide ? 15 : 14, height: 1.5),
-                    code: TextStyle(color: Colors.white.withOpacity(0.9), fontFamily: 'monospace', fontSize: isWide ? 14 : 13),
-                    blockquote: TextStyle(color: Colors.white.withOpacity(0.85), fontSize: isWide ? 15 : 14, fontStyle: FontStyle.italic),
-                    h1: TextStyle(color: Colors.white, fontSize: isWide ? 26 : 22, fontWeight: FontWeight.bold),
-                    h2: TextStyle(color: Colors.white, fontSize: isWide ? 24 : 20, fontWeight: FontWeight.bold),
-                    h3: TextStyle(color: Colors.white, fontSize: isWide ? 22 : 18, fontWeight: FontWeight.bold),
-                    h4: TextStyle(color: Colors.white, fontSize: isWide ? 20 : 17, fontWeight: FontWeight.bold),
-                    h5: TextStyle(color: Colors.white, fontSize: isWide ? 18 : 16, fontWeight: FontWeight.bold),
-                    h6: TextStyle(color: Colors.white, fontSize: isWide ? 16 : 15, fontWeight: FontWeight.bold),
-                    a: const TextStyle(color: Color(0xFF60A5FA), decoration: TextDecoration.underline),
-                    strong: TextStyle(color: Colors.white.withOpacity(0.95), fontWeight: FontWeight.w700),
-                    em: TextStyle(color: Colors.white.withOpacity(0.85), fontStyle: FontStyle.italic),
-                    del: TextStyle(color: Colors.white.withOpacity(0.7), decoration: TextDecoration.lineThrough),
+                    p: TextStyle(
+                      color: isUser ? palette.accentTextOnPrimary : palette.textPrimary,
+                      fontSize: isWide ? 15 : 14,
+                      height: 1.5,
+                    ),
+                    code: TextStyle(
+                      color: palette.textPrimary,
+                      fontFamily: 'monospace',
+                      fontSize: isWide ? 14 : 13,
+                    ),
+                    blockquote: TextStyle(
+                      color: palette.textSecondary,
+                      fontSize: isWide ? 15 : 14,
+                      fontStyle: FontStyle.italic,
+                    ),
+                    h1: TextStyle(color: palette.textPrimary, fontSize: isWide ? 26 : 22, fontWeight: FontWeight.bold),
+                    h2: TextStyle(color: palette.textPrimary, fontSize: isWide ? 24 : 20, fontWeight: FontWeight.bold),
+                    h3: TextStyle(color: palette.textPrimary, fontSize: isWide ? 22 : 18, fontWeight: FontWeight.bold),
+                    h4: TextStyle(color: palette.textPrimary, fontSize: isWide ? 20 : 17, fontWeight: FontWeight.bold),
+                    h5: TextStyle(color: palette.textPrimary, fontSize: isWide ? 18 : 16, fontWeight: FontWeight.bold),
+                    h6: TextStyle(color: palette.textPrimary, fontSize: isWide ? 16 : 15, fontWeight: FontWeight.bold),
+                    a: TextStyle(color: palette.primary, decoration: TextDecoration.underline),
+                    strong: TextStyle(
+                      color: isUser ? palette.accentTextOnPrimary : palette.textPrimary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    em: TextStyle(
+                      color: isUser ? palette.accentTextOnPrimary : palette.textPrimary,
+                      fontStyle: FontStyle.italic,
+                    ),
+                    del: TextStyle(color: palette.textMuted, decoration: TextDecoration.lineThrough),
                     blockquoteDecoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.04),
+                      color: palette.mutedSurface,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.white.withOpacity(0.1)),
+                      border: Border.all(color: palette.border),
                     ),
                     codeblockDecoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.4),
+                      color: palette.mutedSurface,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.white.withOpacity(0.08)),
+                      border: Border.all(color: palette.border),
                     ),
-                    listBullet: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: isWide ? 15 : 14),
+                    listBullet: TextStyle(
+                      color: isUser ? palette.accentTextOnPrimary : palette.textPrimary,
+                      fontSize: isWide ? 15 : 14,
+                    ),
                   ),
                 ),
         );
@@ -1126,13 +1227,13 @@ class _DiscussionPageState extends State<DiscussionPage> {
             mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
             children: [
               if (isBot) ...[
-                _buildEmotionAvatar(emotion),
+                _buildEmotionAvatar(palette, emotion),
                 const SizedBox(width: 16),
               ],
               Flexible(child: bubble),
               if (isUser) ...[
                 const SizedBox(width: 16),
-                _buildUserAvatar(),
+                _buildUserAvatar(palette),
               ],
             ],
           ),
@@ -1140,15 +1241,16 @@ class _DiscussionPageState extends State<DiscussionPage> {
       },
     );
   }
-  Widget _buildEmotionAvatar(String emotion) {
+
+  Widget _buildEmotionAvatar(AppPalette palette, String emotion) {
     final assetName = listeEmotions.contains(emotion) ? emotion : 'naturel';
     return Container(
       width: 42,
       height: 42,
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.08),
+        color: palette.mutedSurface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
+        border: Border.all(color: palette.border),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(12),
@@ -1157,27 +1259,26 @@ class _DiscussionPageState extends State<DiscussionPage> {
     );
   }
 
-  Widget _buildUserAvatar() {
-    return Container(
-      width: 42,
-      height: 42,
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xFF7C3AED), Color(0xFF2563EB)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.all(Radius.circular(14)),
-      ),
-      alignment: Alignment.center,
-      child: Text(
-        user.username.isNotEmpty ? user.username[0].toUpperCase() : 'U',
-        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-      ),
+  Widget _buildUserAvatar(AppPalette palette) {
+    final avatarImage = resolveAvatarImage(user.avatarPath);
+    final initials = user.username.isNotEmpty ? user.username[0].toUpperCase() : 'U';
+    return CircleAvatar(
+      radius: 21,
+      backgroundColor: palette.primary,
+      backgroundImage: avatarImage,
+      child: avatarImage == null
+          ? Text(
+              initials,
+              style: TextStyle(
+                color: palette.accentTextOnPrimary,
+                fontWeight: FontWeight.bold,
+              ),
+            )
+          : null,
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState({required AppPalette palette}) {
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -1186,28 +1287,29 @@ class _DiscussionPageState extends State<DiscussionPage> {
             width: 96,
             height: 96,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.05),
+              color: palette.mutedSurface,
               borderRadius: BorderRadius.circular(32),
+              border: Border.all(color: palette.border),
             ),
-            child: const Icon(Icons.auto_awesome, color: Colors.white70, size: 40),
+            child: Icon(Icons.auto_awesome, color: palette.primary, size: 40),
           ),
           const SizedBox(height: 24),
-          const Text(
-            'How can I assist you today?',
-            style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w600),
+          Text(
+            'Comment puis-je vous aider aujourd'hui ?',
+            style: TextStyle(color: palette.textPrimary, fontSize: 20, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 12),
           Text(
-            'Start by asking a question or describe the context you need help with.',
+            'Commencez par poser une question ou décrivez le contexte dans lequel vous avez besoin d'aide.',
             textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 14),
+            style: TextStyle(color: palette.textSecondary, fontSize: 14),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildFilesPreview({required bool isWide}) {
+  Widget _buildFilesPreview({required bool isWide, required AppPalette palette}) {
     return Container(
       height: 70,
       margin: EdgeInsets.fromLTRB(isWide ? 36 : 16, 18, isWide ? 36 : 16, 0),
@@ -1220,21 +1322,21 @@ class _DiscussionPageState extends State<DiscussionPage> {
             margin: const EdgeInsets.only(right: 12),
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.06),
+              color: palette.surface,
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.white.withOpacity(0.08)),
+              border: Border.all(color: palette.border),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.insert_drive_file, color: Colors.white70, size: 20),
+                Icon(Icons.insert_drive_file, color: palette.primary, size: 20),
                 const SizedBox(width: 12),
                 ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 160),
                   child: Text(
                     p.basename(file.path),
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500),
+                    style: TextStyle(color: palette.textPrimary, fontSize: 14, fontWeight: FontWeight.w500),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -1248,10 +1350,10 @@ class _DiscussionPageState extends State<DiscussionPage> {
                     width: 26,
                     height: 26,
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.12),
+                      color: palette.primary.withOpacity(0.15),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.close, color: Colors.white, size: 16),
+                    child: Icon(Icons.close, color: palette.primary, size: 16),
                   ),
                 ),
               ],
@@ -1261,18 +1363,19 @@ class _DiscussionPageState extends State<DiscussionPage> {
       ),
     );
   }
-  Widget _buildInputBar({required bool isWide}) {
+
+  Widget _buildInputBar({required bool isWide, required AppPalette palette}) {
     return Padding(
       padding: EdgeInsets.fromLTRB(isWide ? 36 : 16, 20, isWide ? 36 : 16, isWide ? 32 : 24),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.05),
+          color: palette.surface,
           borderRadius: BorderRadius.circular(32),
-          border: Border.all(color: Colors.white.withOpacity(0.06)),
+          border: Border.all(color: palette.border),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.25),
+              color: palette.shadow,
               blurRadius: 18,
               offset: const Offset(0, 12),
             ),
@@ -1281,14 +1384,16 @@ class _DiscussionPageState extends State<DiscussionPage> {
         child: Row(
           children: [
             _buildInputIcon(
+              palette,
               icon: Icons.attachment_outlined,
-              tooltip: 'Attach files',
+              tooltip: 'Joindre des fichiers',
               onTap: selectFiles,
             ),
             const SizedBox(width: 12),
             _buildInputIcon(
+              palette,
               icon: Icons.public,
-              tooltip: 'Toggle web search',
+              tooltip: 'Activer ou désactiver la recherche en ligne',
               onTap: switchResearchMode,
               isActive: researchMode,
             ),
@@ -1297,25 +1402,30 @@ class _DiscussionPageState extends State<DiscussionPage> {
               child: TextField(
                 controller: inputController,
                 decoration: InputDecoration(
-                  hintText: 'Type your message... ',
-                  hintStyle: TextStyle(color: Colors.white.withOpacity(0.45)),
+                  hintText: 'Écrivez votre message...',
+                  hintStyle: TextStyle(color: palette.textMuted),
                   border: InputBorder.none,
                   counterText: '',
                 ),
-                style: const TextStyle(color: Colors.white, fontSize: 15),
-                cursorColor: const Color(0xFF38BDF8),
+                style: TextStyle(color: palette.textPrimary, fontSize: 15),
+                cursorColor: palette.primary,
                 maxLength: 25000,
                 minLines: 1,
                 maxLines: 6,
-                onSubmitted: (_) => send(),
+                onSubmitted: (_) {
+                  if (_canSendMessage) {
+                    send();
+                  }
+                },
               ),
             ),
             if (Platform.isAndroid)
               Padding(
                 padding: const EdgeInsets.only(right: 12),
                 child: _buildInputIcon(
+                  palette,
                   icon: isListeningMic ? Icons.stop : Icons.mic,
-                  tooltip: isListeningMic ? 'Stop listening' : 'Start voice input',
+                  tooltip: isListeningMic ? 'Arrêter l'écoute' : 'Dicter un message',
                   onTap: () {
                     if (_speechEnabled && !_isListening) {
                       setState(() {
@@ -1334,19 +1444,22 @@ class _DiscussionPageState extends State<DiscussionPage> {
                 ),
               ),
             GestureDetector(
-              onTap: send,
-              child: Container(
-                width: 52,
-                height: 52,
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Color(0xFF7C3AED), Color(0xFF2563EB)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
+              onTap: _canSendMessage ? send : null,
+              child: Opacity(
+                opacity: _canSendMessage ? 1 : 0.35,
+                child: Container(
+                  width: 52,
+                  height: 52,
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Color(0xFF7C3AED), Color(0xFF2563EB)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    shape: BoxShape.circle,
                   ),
-                  shape: BoxShape.circle,
+                  child: const Icon(Icons.send_rounded, color: Colors.white),
                 ),
-                child: const Icon(Icons.send_rounded, color: Colors.white),
               ),
             ),
           ],
@@ -1355,8 +1468,14 @@ class _DiscussionPageState extends State<DiscussionPage> {
     );
   }
 
-  Widget _buildInputIcon({required IconData icon, required VoidCallback onTap, String? tooltip, bool isActive = false}) {
-    final iconWidget = Icon(icon, color: isActive ? const Color(0xFF38BDF8) : Colors.white70);
+  Widget _buildInputIcon(
+    AppPalette palette, {
+    required IconData icon,
+    required VoidCallback onTap,
+    String? tooltip,
+    bool isActive = false,
+  }) {
+    final iconWidget = Icon(icon, color: isActive ? palette.primary : palette.textMuted);
     final content = InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(18),
@@ -1364,9 +1483,9 @@ class _DiscussionPageState extends State<DiscussionPage> {
         width: 42,
         height: 42,
         decoration: BoxDecoration(
-          color: isActive ? const Color(0xFF0B2948) : Colors.white.withOpacity(0.06),
+          color: isActive ? palette.primary.withOpacity(0.18) : palette.mutedSurface,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: isActive ? const Color(0xFF38BDF8) : Colors.white.withOpacity(0.06)),
+          border: Border.all(color: isActive ? palette.primary : palette.border),
         ),
         child: Center(child: iconWidget),
       ),
@@ -1378,7 +1497,12 @@ class _DiscussionPageState extends State<DiscussionPage> {
     return content;
   }
 
-  Widget _buildHeaderAction({required IconData icon, VoidCallback? onTap, String? tooltip}) {
+  Widget _buildHeaderAction(
+    AppPalette palette, {
+    required IconData icon,
+    VoidCallback? onTap,
+    String? tooltip,
+  }) {
     final action = InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(18),
@@ -1386,11 +1510,11 @@ class _DiscussionPageState extends State<DiscussionPage> {
         width: 44,
         height: 44,
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.06),
+          color: palette.mutedSurface,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: Colors.white.withOpacity(0.08)),
+          border: Border.all(color: palette.border),
         ),
-        child: Icon(icon, color: Colors.white70),
+        child: Icon(icon, color: palette.textMuted),
       ),
     );
     if (tooltip != null) {
@@ -1399,42 +1523,46 @@ class _DiscussionPageState extends State<DiscussionPage> {
     return action;
   }
 
-  Widget _buildStatusChip(String label) {
+  Widget _buildStatusChip(AppPalette palette, String label) {
     return Container(
       margin: const EdgeInsets.only(right: 12),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.08),
+        color: palette.mutedSurface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.1)),
+        border: Border.all(color: palette.border),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const SizedBox(
+          SizedBox(
             width: 14,
             height: 14,
-            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white70),
+            child: CircularProgressIndicator(strokeWidth: 2, color: palette.primary),
           ),
           const SizedBox(width: 10),
           Text(
             label,
-            style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600),
+            style: TextStyle(color: palette.textSecondary, fontSize: 13, fontWeight: FontWeight.w600),
           ),
         ],
       ),
     );
+  }
+  String _buildReportFileName(String subject) {
+    final sanitized = subject.replaceAll(RegExp(r'[^a-zA-Z0-9]+'), '-').replaceAll(RegExp(r'-{2,}'), '-');
+    return '${sanitized.toLowerCase()}-rapport.pdf';
   }
 
   String _formatDate(DateTime date) {
     final now = DateTime.now();
     final difference = now.difference(date);
     if (difference.inMinutes < 1) {
-      return 'Just now';
+      return 'À l\'instant';
     } else if (difference.inHours < 1) {
-      return '${difference.inMinutes} min ago';
+      return 'Il y a ${difference.inMinutes} min';
     } else if (difference.inDays < 1) {
-      return '${difference.inHours} h ago';
+      return 'Il y a ${difference.inHours} h';
     }
     return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
   }
