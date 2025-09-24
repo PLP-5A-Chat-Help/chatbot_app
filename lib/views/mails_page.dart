@@ -1,3 +1,4 @@
+
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -301,7 +302,6 @@ class _MailCard extends StatelessWidget {
   final Color panelColor;
   final VoidCallback onOpenReport;
   final VoidCallback? onStartConversation;
-
   String get formattedDate {
     final day = mail.analyzedAt.day.toString().padLeft(2, '0');
     final month = mail.analyzedAt.month.toString().padLeft(2, '0');
@@ -575,4 +575,5 @@ class _MailReportDialogState extends State<_MailReportDialog> {
     final sanitized = subject.replaceAll(RegExp(r'[^a-zA-Z0-9]+'), '-').replaceAll(RegExp(r'-{2,}'), '-');
     return '${sanitized.toLowerCase()}-report.pdf';
   }
+
 }
