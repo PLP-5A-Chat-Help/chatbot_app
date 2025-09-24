@@ -13,10 +13,13 @@ import 'package:path/path.dart' as p;
 import 'package:http/http.dart' as http;
 import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:speech_to_text/speech_to_text.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../model/conversation_subject.dart';
 import '../model/conversation.dart';
+import '../model/mail_analysis.dart';
 import '../variables.dart';
+import '../utils/mail_report_generator.dart';
 
 /* ----------------------------------
   Projet 4A : Chatbot App
@@ -27,11 +30,12 @@ import '../variables.dart';
 /// Page de discussion
 /// Cette page permet à l'utilisateur de discuter avec le chatbot.
 class DiscussionPage extends StatefulWidget {
-  DiscussionPage({super.key, required this.titre, required this.conversation});
-  DiscussionPage.empty({super.key}) : titre = "", conversation = null;
+  DiscussionPage({super.key, required this.titre, required this.conversation, this.initialReport});
+  DiscussionPage.empty({super.key, this.initialReport}) : titre = "", conversation = null;
 
   final String titre; // Titre de la discussion
   Conversation? conversation;
+  final MailAnalysis? initialReport;
 
   @override
   State<DiscussionPage> createState() => _DiscussionPageState();
@@ -83,6 +87,12 @@ class _DiscussionPageState extends State<DiscussionPage> {
       launchConversation(); // Charge la conversation (sauf si c'est une nouvelle conversation)
     }
 
+    if (widget.initialReport != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _prepareInitialReport(widget.initialReport!);
+      });
+    }
+
     // Charge le SpeechToText si l'application est sur Android
     if(Platform.isAndroid) {
       _initSpeech();
@@ -105,6 +115,52 @@ class _DiscussionPageState extends State<DiscussionPage> {
         _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
       });
     }
+  }
+
+  Future<void> _prepareInitialReport(MailAnalysis mail) async {
+    try {
+      final bytes = await MailReportGenerator.buildReport(mail);
+      final directory = await getTemporaryDirectory();
+      final file = File(p.join(directory.path, _buildReportFileName(mail.subject)));
+      await file.writeAsBytes(bytes, flush: true);
+      if (!mounted) return;
+      setState(() {
+        files.add(file);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Rapport "${mail.subject}" attaché à la conversation.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Impossible de préparer le rapport : $e')),
+      );
+    }
+  }
+
+  void _openMailsPage() {
+    final navigator = Navigator.of(context);
+    navigator.push(
+      PageRouteBuilder(
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
+        pageBuilder: (_, __, ___) => MailsPage(
+          onStartConversation: (mailContext, mail) {
+            Navigator.of(mailContext).push(
+              PageRouteBuilder(
+                transitionDuration: Duration.zero,
+                reverseTransitionDuration: Duration.zero,
+                pageBuilder: (_, __, ___) => DiscussionPage(
+                  titre: mail.subject,
+                  conversation: null,
+                  initialReport: mail,
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
   }
 
   // ---------------------------------- Speech-to-text ----------------------------------
@@ -570,12 +626,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
           _buildSidebarIcon(icon: Icons.chat_bubble_outline, active: true),
           _buildSidebarIcon(
             icon: Icons.folder_copy_outlined,
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const MailsPage()),
-              );
-            },
+            onTap: _openMailsPage,
           ),
           _buildSidebarIcon(icon: Icons.analytics_outlined),
           _buildSidebarIcon(icon: Icons.settings_outlined),
@@ -1437,6 +1488,11 @@ class _DiscussionPageState extends State<DiscussionPage> {
         ],
       ),
     );
+  }
+
+  String _buildReportFileName(String subject) {
+    final sanitized = subject.replaceAll(RegExp(r'[^a-zA-Z0-9]+'), '-').replaceAll(RegExp(r'-{2,}'), '-');
+    return '${sanitized.toLowerCase()}-rapport.pdf';
   }
 
   String _formatDate(DateTime date) {

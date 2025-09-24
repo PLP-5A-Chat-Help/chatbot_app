@@ -1,51 +1,66 @@
-import 'package:flutter/material.dart';
 
+import 'dart:typed_data';
+
+import 'package:flutter/material.dart';
+import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
+
+import '../model/mail_analysis.dart';
+import '../utils/mail_report_generator.dart';
+import '../utils/pdf_saver.dart';
 import '../variables.dart';
 
-/* ----------------------------------
-  Projet 4A : Chatbot App
-  Date : 11/06/2025
-  mails_page.dart
----------------------------------- */
-
 class MailsPage extends StatelessWidget {
-  const MailsPage({super.key});
+  const MailsPage({super.key, this.onStartConversation});
+
+  final void Function(BuildContext context, MailAnalysis mail)? onStartConversation;
 
   Color get _backgroundColor => const Color(0xFF0B101A);
   Color get _panelColor => const Color(0xFF111827);
 
-  static final List<_MailAnalysis> _recentMails = [
-        _MailAnalysis(
-          subject: 'Suspicious login detected',
-          analyzedAt: DateTime(2025, 1, 12, 9, 24),
-          maliciousnessScore: 78,
-        ),
-        _MailAnalysis(
-          subject: 'Invoice #54213 attached',
-          analyzedAt: DateTime(2025, 1, 12, 8, 55),
-          maliciousnessScore: 22,
-        ),
-        _MailAnalysis(
-          subject: 'Password reset confirmation',
-          analyzedAt: DateTime(2025, 1, 11, 19, 41),
-          maliciousnessScore: 12,
-        ),
-        _MailAnalysis(
-          subject: 'Security alert from IT team',
-          analyzedAt: DateTime(2025, 1, 11, 18, 2),
-          maliciousnessScore: 65,
-        ),
-        _MailAnalysis(
-          subject: 'Daily marketing report',
-          analyzedAt: DateTime(2025, 1, 11, 16, 45),
-          maliciousnessScore: 8,
-        ),
-        _MailAnalysis(
-          subject: 'Verify your new device',
-          analyzedAt: DateTime(2025, 1, 11, 15, 12),
-          maliciousnessScore: 48,
-        ),
-      ];
+  static final List<MailAnalysis> _recentMails = [
+    MailAnalysis(
+      subject: 'Suspicious login detected',
+      analyzedAt: DateTime(2025, 1, 12, 9, 24),
+      maliciousnessScore: 78,
+      sender: 'security@acme.inc',
+      summary: 'Connexion suspecte détectée depuis un appareil non reconnu avec tentative de contournement MFA.',
+    ),
+    MailAnalysis(
+      subject: 'Invoice #54213 attached',
+      analyzedAt: DateTime(2025, 1, 12, 8, 55),
+      maliciousnessScore: 22,
+      sender: 'billing@trusted-supplier.com',
+      summary: 'Facture routinière détectée. Pièce jointe PDF vérifiée, aucun comportement malveillant observé.',
+    ),
+    MailAnalysis(
+      subject: 'Password reset confirmation',
+      analyzedAt: DateTime(2025, 1, 11, 19, 41),
+      maliciousnessScore: 12,
+      sender: 'no-reply@company.com',
+      summary: 'Confirmation standard de réinitialisation de mot de passe sans contenu dynamique ou scripts.',
+    ),
+    MailAnalysis(
+      subject: 'Security alert from IT team',
+      analyzedAt: DateTime(2025, 1, 11, 18, 2),
+      maliciousnessScore: 65,
+      sender: 'soc@company.com',
+      summary: 'Notification d\'alerte interne contenant des liens vers le portail sécurisé et instructions de mitigation.',
+    ),
+    MailAnalysis(
+      subject: 'Daily marketing report',
+      analyzedAt: DateTime(2025, 1, 11, 16, 45),
+      maliciousnessScore: 8,
+      sender: 'insights@marketingtools.io',
+      summary: 'Rapport automatisé quotidien. Contenu HTML léger sans redirections externes.',
+    ),
+    MailAnalysis(
+      subject: 'Verify your new device',
+      analyzedAt: DateTime(2025, 1, 11, 15, 12),
+      maliciousnessScore: 48,
+      sender: 'alerts@cloudmailbox.net',
+      summary: 'Demande de validation d\'un nouvel appareil. Lien raccourci pointant vers un domaine tiers.',
+    ),
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -124,12 +139,25 @@ class MailsPage extends StatelessWidget {
                 return _MailCard(
                   mail: mail,
                   panelColor: _panelColor,
+                  onOpenReport: () => _showReportDialog(context, mail),
+                  onStartConversation: onStartConversation == null
+                      ? null
+                      : () => onStartConversation!(context, mail),
                 );
               },
             ),
           ),
         ],
       ),
+    );
+  }
+
+  void _showReportDialog(BuildContext context, MailAnalysis mail) {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      barrierColor: Colors.black54,
+      builder: (_) => _MailReportDialog(mail: mail),
     );
   }
 }
@@ -263,11 +291,17 @@ class _SidebarIcon extends StatelessWidget {
 }
 
 class _MailCard extends StatelessWidget {
-  const _MailCard({required this.mail, required this.panelColor});
+  const _MailCard({
+    required this.mail,
+    required this.panelColor,
+    required this.onOpenReport,
+    this.onStartConversation,
+  });
 
-  final _MailAnalysis mail;
+  final MailAnalysis mail;
   final Color panelColor;
-
+  final VoidCallback onOpenReport;
+  final VoidCallback? onStartConversation;
   String get formattedDate {
     final day = mail.analyzedAt.day.toString().padLeft(2, '0');
     final month = mail.analyzedAt.month.toString().padLeft(2, '0');
@@ -279,87 +313,267 @@ class _MailCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: panelColor,
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(24),
+      child: InkWell(
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withOpacity(0.06)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.2),
-            blurRadius: 12,
-            offset: const Offset(0, 6),
+        onTap: onOpenReport,
+        child: Container(
+          decoration: BoxDecoration(
+            color: panelColor,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: Colors.white.withOpacity(0.06)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.2),
+                blurRadius: 12,
+                offset: const Offset(0, 6),
+              ),
+            ],
           ),
-        ],
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: const Color(0xFF1F2937),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: const Icon(Icons.mail_outline, color: Colors.white70),
-          ),
-          const SizedBox(width: 20),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  mail.subject,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1F2937),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: const Icon(Icons.mail_outline, color: Colors.white70),
                   ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Date d\'analyse : $formattedDate',
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.7),
-                    fontSize: 14,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1F2937),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.white.withOpacity(0.08)),
-                  ),
-                  child: Text(
-                    'Score of maliciousness : ${mail.maliciousnessScore}%',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
+                  const SizedBox(width: 20),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          mail.subject,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Date d\'analyse : $formattedDate',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.7),
+                            fontSize: 14,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Expéditeur : ${mail.sender}',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.6),
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
+                  const SizedBox(width: 12),
+                  _ScoreBadge(score: mail.maliciousnessScore),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Text(
+                mail.summary,
+                style: TextStyle(color: Colors.white.withOpacity(0.75), fontSize: 14),
+              ),
+              const SizedBox(height: 20),
+              Align(
+                alignment: Alignment.centerRight,
+                child: FilledButton.icon(
+                  onPressed: onStartConversation,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFF2563EB),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  icon: const Icon(Icons.forum_outlined),
+                  label: const Text('Nouvelle conversation'),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
 }
 
-class _MailAnalysis {
-  const _MailAnalysis({
-    required this.subject,
-    required this.analyzedAt,
-    required this.maliciousnessScore,
-  });
+class _ScoreBadge extends StatelessWidget {
+  const _ScoreBadge({required this.score});
 
-  final String subject;
-  final DateTime analyzedAt;
-  final int maliciousnessScore;
+  final int score;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color color = score >= 60
+        ? const Color(0xFFB91C1C)
+        : score >= 30
+            ? const Color(0xFFF59E0B)
+            : const Color(0xFF22C55E);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.18),
+        border: Border.all(color: color.withOpacity(0.6)),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Text(
+        'Score : $score%',
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+}
+
+class _MailReportDialog extends StatefulWidget {
+  const _MailReportDialog({required this.mail});
+
+  final MailAnalysis mail;
+
+  @override
+  State<_MailReportDialog> createState() => _MailReportDialogState();
+}
+
+class _MailReportDialogState extends State<_MailReportDialog> {
+  Uint8List? _pdfBytes;
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPdf();
+  }
+
+  Future<void> _loadPdf() async {
+    try {
+      final bytes = await MailReportGenerator.buildReport(widget.mail);
+      if (!mounted) return;
+      setState(() {
+        _pdfBytes = bytes;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = 'Impossible de charger le rapport : $e';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.all(32),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(28),
+        child: Container(
+          color: const Color(0xFF111827),
+          child: Column(
+            children: [
+              Container(
+                color: const Color(0xFF1F2937),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.mail.subject,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Rapport PDF',
+                            style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 13),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Télécharger le rapport',
+                      onPressed: _pdfBytes == null
+                          ? null
+                          : () => savePdf(
+                                _pdfBytes!,
+                                _buildFileName(widget.mail.subject),
+                                context,
+                              ),
+                      icon: const Icon(Icons.download_rounded, color: Colors.white),
+                    ),
+                    IconButton(
+                      tooltip: 'Fermer',
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.close_rounded, color: Colors.white),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Container(
+                  color: const Color(0xFF0B101A),
+                  child: _buildBody(),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_loading) {
+      return const Center(
+        child: CircularProgressIndicator(color: Colors.white70),
+      );
+    }
+
+    if (_error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            _error!,
+            style: const TextStyle(color: Colors.white70),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
+
+    return SfPdfViewer.memory(_pdfBytes!);
+  }
+
+  String _buildFileName(String subject) {
+    final sanitized = subject.replaceAll(RegExp(r'[^a-zA-Z0-9]+'), '-').replaceAll(RegExp(r'-{2,}'), '-');
+    return '${sanitized.toLowerCase()}-report.pdf';
+  }
+
 }

@@ -20,6 +20,9 @@ dependencies:
   flutter_markdown_plus: ^1.0.3
   speech_to_text: ^7.0.0
   flutter_launcher_icons: ^0.14.4
+  pdf: ^3.11.0
+  syncfusion_flutter_pdfviewer: ^26.1.41
+  path_provider: ^2.1.4
 
 
 dev_dependencies:
