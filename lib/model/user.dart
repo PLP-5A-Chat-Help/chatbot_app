@@ -1,5 +1,6 @@
 
 import 'dart:core';
+import 'package:flutter/foundation.dart';
 
 /* ----------------------------------
   Projet 4A : Chatbot App
@@ -9,7 +10,7 @@ import 'dart:core';
 
 /// Classe représentant un utilisateur
 /// Elle contient le token d'authentification, le type de token et le nom d'utilisateur
-class User {
+class User extends ChangeNotifier {
 
   String accessToken;
   String tokenType;
@@ -31,14 +32,37 @@ class User {
 
   void setAccessToken(String token) {
     accessToken = token;
+    notifyListeners();
   }
 
   void setTokenType(String type) {
     tokenType = type;
+    notifyListeners();
   }
 
   void setUsername(String name) {
     username = name;
+    notifyListeners();
+  }
+
+  void setNames({String? first, String? last}) {
+    if (first != null) {
+      firstName = first;
+    }
+    if (last != null) {
+      lastName = last;
+    }
+    notifyListeners();
+  }
+
+  void setEmail(String value) {
+    email = value;
+    notifyListeners();
+  }
+
+  void setAvatarPath(String? path) {
+    avatarPath = path;
+    notifyListeners();
   }
 
   void setNames({String? first, String? last}) {
@@ -62,6 +86,7 @@ class User {
     lastName = '';
     email = '';
     avatarPath = null;
+    notifyListeners();
   }
 
   String getAccessToken() {

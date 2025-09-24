@@ -8,6 +8,8 @@ import '../utils/app_palette.dart';
 import '../utils/mail_report_generator.dart';
 import '../utils/pdf_saver.dart';
 import '../variables.dart';
+import 'settings_page.dart';
+import 'widgets/primary_navigation.dart';
 
 class MailsPage extends StatelessWidget {
   const MailsPage({super.key, this.onStartConversation});
@@ -72,11 +74,12 @@ class MailsPage extends StatelessWidget {
             if (isWide) {
               return Row(
                 children: [
-                  _PrimarySidebar(
+                  PrimaryNavigation(
                     palette: palette,
                     activeIndex: 1,
                     onChatPressed: () => Navigator.of(context).maybePop(),
                     onMailsPressed: null,
+                    onSettingsPressed: () => _openSettings(context),
                   ),
                   Expanded(child: mailContent),
                 ],
@@ -85,18 +88,29 @@ class MailsPage extends StatelessWidget {
 
             return Column(
               children: [
-                _PrimarySidebar(
+                PrimaryNavigation(
                   palette: palette,
                   activeIndex: 1,
                   isHorizontal: true,
                   onChatPressed: () => Navigator.of(context).maybePop(),
                   onMailsPressed: null,
+                  onSettingsPressed: () => _openSettings(context),
                 ),
                 Expanded(child: mailContent),
               ],
             );
           },
         ),
+      ),
+    );
+  }
+
+  void _openSettings(BuildContext context) {
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
+        pageBuilder: (_, __, ___) => const SettingsPage(),
       ),
     );
   }
@@ -157,139 +171,6 @@ class MailsPage extends StatelessWidget {
       barrierDismissible: true,
       barrierColor: Colors.black54,
       builder: (_) => _MailReportDialog(mail: mail, rootContext: context),
-    );
-  }
-}
-
-class _PrimarySidebar extends StatelessWidget {
-  const _PrimarySidebar({
-    required this.activeIndex,
-    required this.palette,
-    this.isHorizontal = false,
-    this.onChatPressed,
-    this.onMailsPressed,
-  });
-
-  final int activeIndex;
-  final AppPalette palette;
-  final bool isHorizontal;
-  final VoidCallback? onChatPressed;
-  final VoidCallback? onMailsPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final children = <Widget>[
-      _SidebarIcon(
-        palette: palette,
-        icon: Icons.chat_bubble_outline,
-        active: activeIndex == 0,
-        onTap: onChatPressed,
-      ),
-      _SidebarIcon(
-        palette: palette,
-        icon: Icons.folder_copy_outlined,
-        active: activeIndex == 1,
-        onTap: onMailsPressed,
-      ),
-      _SidebarIcon(palette: palette, icon: Icons.settings_outlined),
-      const Spacer(),
-      Container(
-        margin: const EdgeInsets.only(bottom: 12, top: 12),
-        child: CircleAvatar(
-          radius: 22,
-          backgroundColor: palette.mutedSurface,
-          child: Text(
-            user.username.isNotEmpty ? user.username[0].toUpperCase() : 'U',
-            style: TextStyle(color: palette.textPrimary, fontWeight: FontWeight.bold),
-          ),
-        ),
-      ),
-    ];
-
-    if (isHorizontal) {
-      return Container(
-        height: 88,
-        decoration: BoxDecoration(color: palette.surface),
-        child: Row(
-          children: [
-            const SizedBox(width: 24),
-            _buildLogo(),
-            const SizedBox(width: 24),
-            ...children,
-            const SizedBox(width: 24),
-          ],
-        ),
-      );
-    }
-
-    return Container(
-      width: 88,
-      decoration: BoxDecoration(
-        color: palette.surface,
-        border: Border(
-          right: BorderSide(color: palette.border),
-        ),
-      ),
-      child: Column(
-        children: [
-          const SizedBox(height: 24),
-          _buildLogo(),
-          const SizedBox(height: 32),
-          ...children,
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLogo() {
-    return Container(
-      width: 48,
-      height: 48,
-      decoration: BoxDecoration(
-        color: palette.mutedSurface,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(10),
-        child: Image.asset('assets/logo.png', fit: BoxFit.contain),
-      ),
-    );
-  }
-}
-
-class _SidebarIcon extends StatelessWidget {
-  const _SidebarIcon({
-    required this.palette,
-    required this.icon,
-    this.active = false,
-    this.onTap,
-  });
-
-  final AppPalette palette;
-  final IconData icon;
-  final bool active;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(18),
-        onTap: onTap,
-        child: Container(
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-            color: active ? palette.mutedSurface : Colors.transparent,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-              color: active ? palette.strongBorder : palette.border,
-            ),
-          ),
-          child: Icon(icon, color: active ? palette.primary : palette.textMuted),
-        ),
-      ),
     );
   }
 }
@@ -379,34 +260,37 @@ class _MailCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    Text(
-                      mail.summary,
-                      style: TextStyle(color: palette.textSecondary, fontSize: 14),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            mail.summary,
+                            style: TextStyle(color: palette.textSecondary, fontSize: 14),
+                          ),
+                        ),
+                        if (onStartConversation != null)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 12),
+                            child: FilledButton.icon(
+                              onPressed: onStartConversation,
+                              style: FilledButton.styleFrom(
+                                backgroundColor: palette.primary,
+                                foregroundColor: palette.accentTextOnPrimary,
+                                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                              ),
+                              icon: const Icon(Icons.forum_outlined),
+                              label: const Text('Nouvelle conversation'),
+                            ),
+                          ),
+                      ],
                     ),
                   ],
                 ),
               ),
               const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  _ScoreBadge(palette: palette, score: mail.maliciousnessScore),
-                  if (onStartConversation != null) ...[
-                    const SizedBox(height: 12),
-                    FilledButton.icon(
-                      onPressed: onStartConversation,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: const Color(0xFF2563EB),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      ),
-                      icon: const Icon(Icons.forum_outlined),
-                      label: const Text('Nouvelle conversation'),
-                    ),
-                  ],
-                ],
-              ),
+              _ScoreBadge(palette: palette, score: mail.maliciousnessScore),
             ],
           ),
         ),

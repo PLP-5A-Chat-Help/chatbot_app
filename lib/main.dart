@@ -41,6 +41,25 @@ class MyApp extends StatelessWidget {
     );
   }
 
+  ThemeData _buildDarkTheme() {
+    const baseScheme = ColorScheme.dark(
+      primary: Color(0xFF2563EB),
+      secondary: Color(0xFF7C3AED),
+      surface: Color(0xFF111827),
+      surfaceTint: Color(0xFF111827),
+      background: Color(0xFF0B101A),
+    );
+    return ThemeData(
+      useMaterial3: true,
+      colorScheme: baseScheme,
+      scaffoldBackgroundColor: baseScheme.background,
+      dialogBackgroundColor: baseScheme.surface,
+      textSelectionTheme: TextSelectionThemeData(
+        selectionColor: Colors.cyan.withOpacity(0.35),
+      ),
+    );
+  }
+
   ThemeData _buildLightTheme() {
     const baseScheme = ColorScheme.light(
       primary: Color(0xFF2563EB),

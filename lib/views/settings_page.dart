@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import '../utils/app_palette.dart';
 import '../variables.dart';
 import 'home_page.dart';
+import 'mails_page.dart';
+import 'widgets/primary_navigation.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -107,150 +109,204 @@ class _SettingsPageState extends State<SettingsPage> {
 
     return Scaffold(
       backgroundColor: palette.background,
-      appBar: AppBar(
-        backgroundColor: palette.surface,
-        foregroundColor: palette.textPrimary,
-        title: const Text('Paramètres'),
-        elevation: 0,
-      ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _SectionCard(
-                palette: palette,
-                title: 'Profil utilisateur',
-                child: Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 36,
-                      backgroundColor: palette.mutedSurface,
-                      backgroundImage: avatarImage,
-                      child: avatarImage == null
-                          ? Text(
-                              user.username.isNotEmpty ? user.username[0].toUpperCase() : 'U',
-                              style: TextStyle(
-                                color: palette.textPrimary,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 24,
-                              ),
-                            )
-                          : null,
-                    ),
-                    const SizedBox(width: 24),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            user.username,
-                            style: TextStyle(
-                              color: palette.textPrimary,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            user.email,
-                            style: TextStyle(color: palette.textSecondary),
-                          ),
-                          const SizedBox(height: 12),
-                          Wrap(
-                            spacing: 12,
-                            children: [
-                              FilledButton.icon(
-                                onPressed: _pickAvatar,
-                                icon: const Icon(Icons.photo_camera_outlined),
-                                label: const Text('Modifier l\'avatar'),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isWide = constraints.maxWidth >= 900;
+            final content = _buildSettingsContent(
+              palette: palette,
+              avatarImage: avatarImage,
+              downloadDirectory: downloadDirectory,
+            );
+
+            if (isWide) {
+              return Row(
+                children: [
+                  PrimaryNavigation(
+                    palette: palette,
+                    activeIndex: 2,
+                    onChatPressed: () => Navigator.of(context).maybePop(),
+                    onMailsPressed: () => _openMailsFromSettings(context),
+                    onSettingsPressed: null,
+                  ),
+                  Expanded(child: content),
+                ],
+              );
+            }
+
+            return Column(
+              children: [
+                PrimaryNavigation(
+                  palette: palette,
+                  activeIndex: 2,
+                  isHorizontal: true,
+                  onChatPressed: () => Navigator.of(context).maybePop(),
+                  onMailsPressed: () => _openMailsFromSettings(context),
+                  onSettingsPressed: null,
                 ),
-              ),
-              const SizedBox(height: 24),
-              _SectionCard(
-                palette: palette,
-                title: 'Informations personnelles',
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _InfoLine(label: 'Prénom', value: user.firstName.isEmpty ? 'Non renseigné' : user.firstName, palette: palette),
-                    const SizedBox(height: 12),
-                    _InfoLine(label: 'Nom', value: user.lastName.isEmpty ? 'Non renseigné' : user.lastName, palette: palette),
-                    const SizedBox(height: 12),
-                    _InfoLine(label: 'Adresse e-mail', value: user.email.isEmpty ? 'Non renseignée' : user.email, palette: palette),
-                  ],
+                Expanded(child: content),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSettingsContent({
+    required AppPalette palette,
+    required ImageProvider? avatarImage,
+    required String? downloadDirectory,
+  }) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Paramètres',
+            style: TextStyle(
+              color: palette.textPrimary,
+              fontSize: 26,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 16),
+          _SectionCard(
+            palette: palette,
+            title: 'Profil utilisateur',
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 36,
+                  backgroundColor: palette.mutedSurface,
+                  backgroundImage: avatarImage,
+                  child: avatarImage == null
+                      ? Text(
+                          user.username.isNotEmpty ? user.username[0].toUpperCase() : 'U',
+                          style: TextStyle(
+                            color: palette.textPrimary,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 24,
+                          ),
+                        )
+                      : null,
                 ),
-              ),
-              const SizedBox(height: 24),
-              _SectionCard(
-                palette: palette,
-                title: 'Personnalisation',
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    TextField(
-                      controller: _usernameController,
-                      decoration: const InputDecoration(
-                        labelText: 'Nom d\'utilisateur',
-                        border: OutlineInputBorder(),
+                const SizedBox(width: 24),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        user.username,
+                        style: TextStyle(
+                          color: palette.textPrimary,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: FilledButton.icon(
-                        onPressed: _saveUsername,
-                        icon: const Icon(Icons.save_outlined),
-                        label: const Text('Enregistrer'),
+                      const SizedBox(height: 6),
+                      Text(
+                        user.email,
+                        style: TextStyle(color: palette.textSecondary),
                       ),
-                    ),
-                    const Divider(height: 32),
-                    SwitchListTile.adaptive(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Activer le mode clair'),
-                      subtitle: const Text('Utilise une interface blanche plus lumineuse.'),
-                      value: appPreferences.isLightMode,
-                      onChanged: _toggleTheme,
-                    ),
-                    const Divider(height: 32),
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Dossier de téléchargement des rapports'),
-                      subtitle: Text(
-                        downloadDirectory ?? 'Utilisation du dossier par défaut',
-                        style: TextStyle(color: palette.textMuted),
+                      const SizedBox(height: 12),
+                      FilledButton.icon(
+                        onPressed: _pickAvatar,
+                        icon: const Icon(Icons.photo_camera_outlined),
+                        label: const Text('Modifier l\'avatar'),
                       ),
-                      trailing: const Icon(Icons.folder_open_outlined),
-                      onTap: _pickDownloadDirectory,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-              _SectionCard(
-                palette: palette,
-                title: 'Sécurité',
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: FilledButton.icon(
-                    style: FilledButton.styleFrom(backgroundColor: palette.danger),
-                    onPressed: _logout,
-                    icon: const Icon(Icons.logout),
-                    label: const Text('Se déconnecter'),
+                    ],
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
+          const SizedBox(height: 24),
+          _SectionCard(
+            palette: palette,
+            title: 'Informations personnelles',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _InfoLine(label: 'Prénom', value: user.firstName.isEmpty ? 'Non renseigné' : user.firstName, palette: palette),
+                const SizedBox(height: 12),
+                _InfoLine(label: 'Nom', value: user.lastName.isEmpty ? 'Non renseigné' : user.lastName, palette: palette),
+                const SizedBox(height: 12),
+                _InfoLine(label: 'Adresse e-mail', value: user.email.isEmpty ? 'Non renseignée' : user.email, palette: palette),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          _SectionCard(
+            palette: palette,
+            title: 'Personnalisation',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: _usernameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Nom d\'utilisateur',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: FilledButton.icon(
+                    onPressed: _saveUsername,
+                    icon: const Icon(Icons.save_outlined),
+                    label: const Text('Enregistrer'),
+                  ),
+                ),
+                const Divider(height: 32),
+                SwitchListTile.adaptive(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Activer le mode clair'),
+                  subtitle: const Text('Utilise une interface blanche plus lumineuse.'),
+                  value: appPreferences.isLightMode,
+                  onChanged: _toggleTheme,
+                ),
+                const Divider(height: 32),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Dossier de téléchargement des rapports'),
+                  subtitle: Text(
+                    downloadDirectory ?? 'Utilisation du dossier par défaut',
+                    style: TextStyle(color: palette.textMuted),
+                  ),
+                  trailing: const Icon(Icons.folder_open_outlined),
+                  onTap: _pickDownloadDirectory,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          _SectionCard(
+            palette: palette,
+            title: 'Sécurité',
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: FilledButton.icon(
+                style: FilledButton.styleFrom(backgroundColor: palette.danger),
+                onPressed: _logout,
+                icon: const Icon(Icons.logout),
+                label: const Text('Se déconnecter'),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openMailsFromSettings(BuildContext context) {
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
+        pageBuilder: (_, __, ___) => const MailsPage(),
       ),
     );
   }
