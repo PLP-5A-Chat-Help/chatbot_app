@@ -69,7 +69,6 @@ class _DiscussionPageState extends State<DiscussionPage> {
   void initState() {
     super.initState();
     _scrollController = ScrollController();
-    inputController.addListener(_onInputChanged);
 
     drawerData = loadSubjects();
     subjectSearchController.addListener(() {
@@ -102,19 +101,11 @@ class _DiscussionPageState extends State<DiscussionPage> {
 
   @override
   void dispose() {
-    inputController.removeListener(_onInputChanged);
     inputController.dispose();
     subjectSearchController.dispose();
     _scrollController.dispose();
     super.dispose();
   }
-
-  void _onInputChanged() {
-    if (!mounted) return;
-    setState(() {});
-  }
-
-  bool get _canSendMessage => inputController.text.trim().isNotEmpty && !isLoading;
 
 
   /// Fonction pour descendre en bas de la liste des messages
@@ -370,10 +361,6 @@ class _DiscussionPageState extends State<DiscussionPage> {
 
   /// Envoie le message saisi par l'utilisateur
   void send() async {
-    final message = inputController.text.trim();
-    if (message.isEmpty || isLoading) {
-      return;
-    }
     setState(() {
       if (widget.conversation == null) {
         // Si la conversation est nulle, on crée une nouvelle conversation
@@ -381,12 +368,12 @@ class _DiscussionPageState extends State<DiscussionPage> {
           id: "-1",
           title: "",
           messages: [
-            ["user", message, ""],
+            ["user", inputController.text, ""],
           ],
         );
       } else {
         // Sinon, on ajoute le message à la conversation existante
-        widget.conversation?.addMessage("user", message, "");
+        widget.conversation?.addMessage("user", inputController.text, "");
       }
       isLoading = true;
       widget.conversation?.messages.add(["system", "loading", ""]); // message temporaire pour l'animation
@@ -398,7 +385,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
 
     final request =
         http.MultipartRequest('POST', uri)
-          ..fields['content'] = message
+          ..fields['content'] = inputController.text
           ..fields['use_web'] = researchMode.toString()
           ..fields['conversation_id'] = (widget.conversation?.id).toString()
           ..headers['Authorization'] = 'Bearer ${user.accessToken}';
@@ -641,6 +628,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
             icon: Icons.folder_copy_outlined,
             onTap: _openMailsPage,
           ),
+          _buildSidebarIcon(icon: Icons.analytics_outlined),
           _buildSidebarIcon(icon: Icons.settings_outlined),
           const Spacer(),
           Container(
@@ -649,7 +637,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
               radius: 22,
               backgroundColor: const Color(0xFF1F2937),
               child: Text(
-                user.username.isNotEmpty ? user.username[0].toUpperCase() : 'U',
+                user.username.isNotEmpty ? user.username[0].toUpperCase() : '?',
                 style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
               ),
             ),
@@ -700,7 +688,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Mes discussions',
+                  'My Chats',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 22,
@@ -709,7 +697,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Retrouvez facilement toutes vos conversations',
+                  'Stay on top of your conversations',
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.6),
                     fontSize: 13,
@@ -740,27 +728,27 @@ class _DiscussionPageState extends State<DiscussionPage> {
                           offset: const Offset(0, 8),
                         ),
                       ],
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 36,
-                            height: 36,
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.18),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: const Icon(Icons.add, color: Colors.white),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.18),
+                            borderRadius: BorderRadius.circular(12),
                           ),
-                          const SizedBox(width: 16),
-                          const Expanded(
-                            child: Text(
-                              'Nouvelle discussion',
-                              style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
-                            ),
+                          child: const Icon(Icons.add, color: Colors.white),
+                        ),
+                        const SizedBox(width: 16),
+                        const Expanded(
+                          child: Text(
+                            'New conversation',
+                            style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -785,7 +773,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
                       controller: subjectSearchController,
                       style: const TextStyle(color: Colors.white),
                       decoration: InputDecoration(
-                        hintText: 'Rechercher une conversation',
+                        hintText: 'Search conversations',
                         hintStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
                         border: InputBorder.none,
                       ),
@@ -825,7 +813,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
                 } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
                   return Center(
                     child: Text(
-                      'Aucune conversation pour le moment',
+                      'No conversations yet',
                       style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 15),
                     ),
                   );
@@ -840,7 +828,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
                 if (filteredSubjects.isEmpty) {
                   return Center(
                     child: Text(
-                      'Aucune conversation correspondante',
+                      'No conversations found',
                       style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 15),
                     ),
                   );
@@ -948,7 +936,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
                     radius: 20,
                     backgroundColor: const Color(0xFF1F2937),
                     child: Text(
-                      user.username.isNotEmpty ? user.username[0].toUpperCase() : 'U',
+                      user.username.isNotEmpty ? user.username[0].toUpperCase() : '?',
                       style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                     ),
                   ),
@@ -963,11 +951,16 @@ class _DiscussionPageState extends State<DiscussionPage> {
                           style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
                         ),
                         Text(
-                          'Session active',
+                          'Active session',
                           style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 12),
                         ),
                       ],
                     ),
+                  ),
+                  _buildHeaderAction(
+                    icon: Icons.logout,
+                    tooltip: 'Log out',
+                    onTap: logout,
                   ),
                 ],
               ),
@@ -980,7 +973,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
   Widget _buildChatSection({required bool isWide}) {
     final conversationTitle = widget.conversation?.title.isNotEmpty == true
         ? widget.conversation!.title
-        : (widget.titre.isNotEmpty ? widget.titre : 'Nouvelle conversation');
+        : (widget.titre.isNotEmpty ? widget.titre : 'New conversation');
 
     return Container(
       decoration: const BoxDecoration(
@@ -1004,7 +997,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
                 if (!isWide)
                   _buildHeaderAction(
                     icon: Icons.menu,
-                    tooltip: 'Ouvrir les conversations',
+                    tooltip: 'Open conversations',
                     onTap: openMenu,
                   )
                 else
@@ -1029,9 +1022,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        researchMode
-                            ? 'Recherche web activée'
-                            : 'Base de connaissances locale',
+                        researchMode ? 'Web search enabled' : 'Local knowledge base',
                         style: TextStyle(
                           color: Colors.white.withOpacity(0.6),
                           fontSize: 13,
@@ -1041,16 +1032,22 @@ class _DiscussionPageState extends State<DiscussionPage> {
                   ),
                 ),
                 if (isLoading)
-                  _buildStatusChip('Réponse en cours...'),
+                  _buildStatusChip('Generating response...'),
                 if (!isWide) const SizedBox(width: 8),
                 _buildHeaderAction(
                   icon: Icons.refresh,
-                  tooltip: 'Rafraîchir les conversations',
+                  tooltip: 'Reload conversations',
                   onTap: () {
                     setState(() {
                       drawerData = loadSubjects();
                     });
                   },
+                ),
+                if (isWide) const SizedBox(width: 12),
+                _buildHeaderAction(
+                  icon: Icons.logout,
+                  tooltip: 'Log out',
+                  onTap: logout,
                 ),
               ],
             ),
@@ -1260,12 +1257,12 @@ class _DiscussionPageState extends State<DiscussionPage> {
           ),
           const SizedBox(height: 24),
           const Text(
-            'Comment puis-je vous aider aujourd\'hui ?',
+            'How can I assist you today?',
             style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 12),
           Text(
-            'Commencez par poser une question ou décrivez le contexte dans lequel vous avez besoin d\'aide.',
+            'Start by asking a question or describe the context you need help with.',
             textAlign: TextAlign.center,
             style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 14),
           ),
@@ -1349,13 +1346,13 @@ class _DiscussionPageState extends State<DiscussionPage> {
           children: [
             _buildInputIcon(
               icon: Icons.attachment_outlined,
-              tooltip: 'Joindre des fichiers',
+              tooltip: 'Attach files',
               onTap: selectFiles,
             ),
             const SizedBox(width: 12),
             _buildInputIcon(
               icon: Icons.public,
-              tooltip: 'Activer ou désactiver la recherche en ligne',
+              tooltip: 'Toggle web search',
               onTap: switchResearchMode,
               isActive: researchMode,
             ),
@@ -1364,7 +1361,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
               child: TextField(
                 controller: inputController,
                 decoration: InputDecoration(
-                  hintText: 'Écrivez votre message...',
+                  hintText: 'Type your message... ',
                   hintStyle: TextStyle(color: Colors.white.withOpacity(0.45)),
                   border: InputBorder.none,
                   counterText: '',
@@ -1374,11 +1371,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
                 maxLength: 25000,
                 minLines: 1,
                 maxLines: 6,
-                onSubmitted: (_) {
-                  if (_canSendMessage) {
-                    send();
-                  }
-                },
+                onSubmitted: (_) => send(),
               ),
             ),
             if (Platform.isAndroid)
@@ -1386,7 +1379,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
                 padding: const EdgeInsets.only(right: 12),
                 child: _buildInputIcon(
                   icon: isListeningMic ? Icons.stop : Icons.mic,
-                  tooltip: isListeningMic ? 'Arrêter l\'écoute' : 'Dicter un message',
+                  tooltip: isListeningMic ? 'Stop listening' : 'Start voice input',
                   onTap: () {
                     if (_speechEnabled && !_isListening) {
                       setState(() {
@@ -1405,22 +1398,19 @@ class _DiscussionPageState extends State<DiscussionPage> {
                 ),
               ),
             GestureDetector(
-              onTap: _canSendMessage ? send : null,
-              child: Opacity(
-                opacity: _canSendMessage ? 1 : 0.35,
-                child: Container(
-                  width: 52,
-                  height: 52,
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [Color(0xFF7C3AED), Color(0xFF2563EB)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    shape: BoxShape.circle,
+              onTap: send,
+              child: Container(
+                width: 52,
+                height: 52,
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Color(0xFF7C3AED), Color(0xFF2563EB)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
-                  child: const Icon(Icons.send_rounded, color: Colors.white),
+                  shape: BoxShape.circle,
                 ),
+                child: const Icon(Icons.send_rounded, color: Colors.white),
               ),
             ),
           ],
@@ -1509,11 +1499,11 @@ class _DiscussionPageState extends State<DiscussionPage> {
     final now = DateTime.now();
     final difference = now.difference(date);
     if (difference.inMinutes < 1) {
-      return 'À l\'instant';
+      return 'Just now';
     } else if (difference.inHours < 1) {
-      return 'Il y a ${difference.inMinutes} min';
+      return '${difference.inMinutes} min ago';
     } else if (difference.inDays < 1) {
-      return 'Il y a ${difference.inHours} h';
+      return '${difference.inHours} h ago';
     }
     return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
   }
