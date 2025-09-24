@@ -9,7 +9,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'mails_page.dart';
 import 'settings_page.dart';
-
 import 'package:path/path.dart' as p;
 import 'package:http/http.dart' as http;
 import 'package:speech_to_text/speech_recognition_result.dart';
@@ -192,7 +191,6 @@ class _DiscussionPageState extends State<DiscussionPage> {
       ),
     );
   }
-
   // ---------------------------------- Speech-to-text ----------------------------------
 
   /// Initialise le SpeechToText
@@ -749,9 +747,8 @@ class _DiscussionPageState extends State<DiscussionPage> {
                               fontWeight: FontWeight.w600,
                             ),
                           ),
-                        ),
-                      ],
-                    ),
+                        ],
+                      ),
                   ),
                 ),
               ],
@@ -1425,7 +1422,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
                 child: _buildInputIcon(
                   palette,
                   icon: isListeningMic ? Icons.stop : Icons.mic,
-                  tooltip: isListeningMic ? 'Arrêter l'écoute' : 'Dicter un message',
+                  tooltip: isListeningMic ? 'Arrêter l\'écoute' : 'Dicter un message',
                   onTap: () {
                     if (_speechEnabled && !_isListening) {
                       setState(() {
@@ -1549,6 +1546,11 @@ class _DiscussionPageState extends State<DiscussionPage> {
       ),
     );
   }
+  String _buildReportFileName(String subject) {
+    final sanitized = subject.replaceAll(RegExp(r'[^a-zA-Z0-9]+'), '-').replaceAll(RegExp(r'-{2,}'), '-');
+    return '${sanitized.toLowerCase()}-rapport.pdf';
+  }
+
   String _buildReportFileName(String subject) {
     final sanitized = subject.replaceAll(RegExp(r'[^a-zA-Z0-9]+'), '-').replaceAll(RegExp(r'-{2,}'), '-');
     return '${sanitized.toLowerCase()}-rapport.pdf';
