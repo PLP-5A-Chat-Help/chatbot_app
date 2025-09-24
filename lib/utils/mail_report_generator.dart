@@ -15,10 +15,7 @@ class MailReportGenerator {
 
     doc.addPage(
       pw.MultiPage(
-        pageTheme: pw.PageTheme(
-          pageFormat: PdfPageFormat.a4,
-          margin: const pw.EdgeInsets.all(28),
-        ),
+        pageTheme: const pw.PageTheme(margin: pw.EdgeInsets.all(28)),
         build: (context) => [
           pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,

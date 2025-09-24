@@ -53,9 +53,8 @@ class _HomePageState extends State<HomePage> {
 
     // Prépare l'URL et le corps de la requête
     final url = Uri.parse('$urlPrefix/login');
-    final username = usernameController.text.trim();
     final body = {
-      "email": username,
+      "email": usernameController.text,
       "password": passwordController.text,
     };
 
@@ -76,7 +75,7 @@ class _HomePageState extends State<HomePage> {
         // Récupère le token d'accès
         user.setAccessToken(data['access_token']);
         user.setTokenType(data['token_type']);
-        user.setUsername(username.isEmpty ? 'Utilisateur' : username);
+        user.setUsername(usernameController.text);
 
         //print("Connexion réussie: ${user.getAccessToken()}");
 
