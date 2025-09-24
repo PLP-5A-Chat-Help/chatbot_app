@@ -35,7 +35,7 @@ class MyApp extends StatelessWidget {
           ),
         ),
 
-        // Page d'acceuil
+        // Page d'accueil
         home: const HomePage(),
       ),
     );
