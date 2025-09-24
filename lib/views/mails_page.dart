@@ -1,5 +1,5 @@
-import 'dart:typed_data';
 
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 
@@ -13,7 +13,6 @@ class MailsPage extends StatelessWidget {
   const MailsPage({super.key, this.onStartConversation});
 
   final void Function(BuildContext context, MailAnalysis mail)? onStartConversation;
-
   static final List<MailAnalysis> _recentMails = [
     MailAnalysis(
       subject: 'Connexion suspecte détectée',
@@ -307,7 +306,6 @@ class _MailCard extends StatelessWidget {
   final AppPalette palette;
   final VoidCallback onOpenReport;
   final VoidCallback? onStartConversation;
-
   String get formattedDate {
     final day = mail.analyzedAt.day.toString().padLeft(2, '0');
     final month = mail.analyzedAt.month.toString().padLeft(2, '0');

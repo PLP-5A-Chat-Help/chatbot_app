@@ -133,6 +133,7 @@ class _HomePageState extends State<HomePage> {
       ),
     );
   }
+
 }
 
 class _AuthCard extends StatelessWidget {

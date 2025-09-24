@@ -9,7 +9,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'mails_page.dart';
 import 'settings_page.dart';
-
 import 'package:path/path.dart' as p;
 import 'package:http/http.dart' as http;
 import 'package:speech_to_text/speech_recognition_result.dart';
@@ -182,7 +181,6 @@ class _DiscussionPageState extends State<DiscussionPage> {
       ),
     );
   }
-
   // ---------------------------------- Speech-to-text ----------------------------------
 
   /// Initialise le SpeechToText
