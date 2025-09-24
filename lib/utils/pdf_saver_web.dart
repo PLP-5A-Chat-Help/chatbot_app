@@ -1,16 +1,17 @@
-// ignore: avoid_web_libraries_in_flutter
+
 import 'dart:html' as html;
 import 'dart:typed_data';
 
-Future<String?> savePdfBytes(Uint8List bytes, String filename) async {
-  final blob = html.Blob([bytes]);
+Future<String?> savePdfBytes(Uint8List bytes, String filename, {String? directoryPath}) async {
+  final blob = html.Blob([bytes], 'application/pdf');
   final url = html.Url.createObjectUrlFromBlob(blob);
-  final anchor = html.AnchorElement(href: url)
+  final anchor = html.document.createElement('a') as html.AnchorElement
+    ..href = url
     ..download = filename
     ..style.display = 'none';
-  html.document.body?.append(anchor);
+  html.document.body?.children.add(anchor);
   anchor.click();
-  anchor.remove();
+  html.document.body?.children.remove(anchor);
   html.Url.revokeObjectUrl(url);
   return null;
 }

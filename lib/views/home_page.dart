@@ -5,6 +5,7 @@ import 'package:chatbot_app/views/discussion_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../utils/app_palette.dart';
 import '../variables.dart';
 
 /* ----------------------------------
@@ -22,13 +23,10 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  // Controlleurs pour les champs de texte
   final TextEditingController usernameController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
-  // Message qui apparaît en cas d'erreur
   String messageErreur = "";
 
-  /// Crée un client HTTP sécurisé avec le certificat CA
   Future<HttpClient> createSecureHttpClient() async {
     final context = SecurityContext.defaultContext;
     final ByteData certData = await rootBundle.load('assets/certs/myCA.pem');
@@ -36,65 +34,68 @@ class _HomePageState extends State<HomePage> {
     return HttpClient(context: context);
   }
 
-
-  /// Méthode pour se connecter
-  void connexion() async {
-    Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => DiscussionPage.empty()),
-        );
-    // Vide le message d'erreur
+  Future<void> connexion() async {
     setState(() {
       messageErreur = "";
     });
 
-    // Crée un client HTTP sécurisé
     final client = await createSecureHttpClient();
-
-    // Prépare l'URL et le corps de la requête
     final url = Uri.parse('$urlPrefix/login');
+    final username = usernameController.text.trim();
     final body = {
-      "email": usernameController.text,
+      "email": username,
       "password": passwordController.text,
     };
 
     try {
-      // Envoie la requête POST pour la connexion
       final request = await client.postUrl(url);
       request.headers.set(HttpHeaders.contentTypeHeader, "application/json");
       request.add(utf8.encode(jsonEncode(body)));
 
-      // Attend la réponse du serveur
       final response = await request.close();
 
-      // Vérifie le code de statut de la réponse
       if (response.statusCode == 200) {
         final responseBody = await response.transform(utf8.decoder).join();
         final data = jsonDecode(responseBody);
 
-        // Récupère le token d'accès
-        user.setAccessToken(data['access_token']);
-        user.setTokenType(data['token_type']);
-        user.setUsername(usernameController.text);
+        user.setAccessToken(data['access_token'] ?? '');
+        user.setTokenType(data['token_type'] ?? '');
+        user.setUsername(username.isEmpty ? 'Utilisateur' : username);
 
-        //print("Connexion réussie: ${user.getAccessToken()}");
+        if (data is Map<String, dynamic>) {
+          final infos = data['utilisateur'] ?? data['user'];
+          if (infos is Map<String, dynamic>) {
+            user.setNames(
+              first: (infos['prenom'] ?? infos['first_name'] ?? '') as String,
+              last: (infos['nom'] ?? infos['last_name'] ?? '') as String,
+            );
+            final emailValue = (infos['email'] ?? username) as String;
+            user.setEmail(emailValue);
+            final avatar = infos['avatar'] as String?;
+            if (avatar != null && avatar.isNotEmpty) {
+              user.setAvatarPath(avatar);
+            }
+          } else {
+            user.setEmail(username);
+          }
+        } else {
+          user.setEmail(username);
+        }
 
-        // Vide les champs de texte
         usernameController.clear();
         passwordController.clear();
 
-        // Navigue vers la page de discussion
-        
+        if (!mounted) return;
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => DiscussionPage.empty()),
+        );
       } else {
-        // Affiche un message d'erreur si la connexion échoue (erreur envoyée par l'API)
-        //print("Erreur lors de la connexion : ${response.statusCode}");
         setState(() {
           messageErreur = "Erreur lors de la connexion : ${response.statusCode}";
         });
       }
     } catch (e) {
-      // Gère les exceptions et affiche un message d'erreur (erreur de connexion, problème de certificat, etc.)
-      //print("Exception pendant la connexion : $e");
       setState(() {
         messageErreur = "Erreur pendant la connexion.";
       });
@@ -108,27 +109,23 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
 
-  Color get _backgroundColor => const Color(0xFF0B101A);
-  Color get _panelColor => const Color(0xFF111827);
-  Color get _inputColor => const Color(0xFF1F2937);
-
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
-        backgroundColor: _backgroundColor,
+        backgroundColor: palette.background,
         body: SafeArea(
           child: Center(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
               child: _AuthCard(
+                palette: palette,
                 messageErreur: messageErreur,
                 onConnexion: connexion,
                 usernameController: usernameController,
                 passwordController: passwordController,
-                panelColor: _panelColor,
-                inputColor: _inputColor,
               ),
             ),
           ),
@@ -141,20 +138,18 @@ class _HomePageState extends State<HomePage> {
 
 class _AuthCard extends StatelessWidget {
   const _AuthCard({
+    required this.palette,
     required this.messageErreur,
     required this.onConnexion,
     required this.usernameController,
     required this.passwordController,
-    required this.panelColor,
-    required this.inputColor,
   });
 
+  final AppPalette palette;
   final String messageErreur;
   final VoidCallback onConnexion;
   final TextEditingController usernameController;
   final TextEditingController passwordController;
-  final Color panelColor;
-  final Color inputColor;
 
   @override
   Widget build(BuildContext context) {
@@ -162,18 +157,21 @@ class _AuthCard extends StatelessWidget {
       width: 360,
       padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
       decoration: BoxDecoration(
-        color: panelColor,
+        color: palette.surface,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
+        border: Border.all(color: palette.border),
+        boxShadow: [
+          BoxShadow(color: palette.shadow, blurRadius: 30, offset: const Offset(0, 18)),
+        ],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             "Connexion",
             style: TextStyle(
-              color: Colors.white,
+              color: palette.textPrimary,
               fontSize: 24,
               fontWeight: FontWeight.bold,
             ),
@@ -185,14 +183,14 @@ class _AuthCard extends StatelessWidget {
               margin: const EdgeInsets.only(bottom: 20),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                color: Colors.red.withOpacity(0.12),
+                color: palette.danger.withOpacity(0.12),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.red.withOpacity(0.4)),
+                border: Border.all(color: palette.danger.withOpacity(0.35)),
               ),
               child: Text(
                 messageErreur,
-                style: const TextStyle(
-                  color: Colors.redAccent,
+                style: TextStyle(
+                  color: palette.danger,
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                 ),
@@ -202,7 +200,7 @@ class _AuthCard extends StatelessWidget {
             controller: usernameController,
             label: "Identifiant",
             hint: "Entrez votre identifiant",
-            inputColor: inputColor,
+            palette: palette,
             icon: Icons.person_outline,
           ),
           const SizedBox(height: 20),
@@ -210,7 +208,7 @@ class _AuthCard extends StatelessWidget {
             controller: passwordController,
             label: "Mot de passe",
             hint: "Entrez votre mot de passe",
-            inputColor: inputColor,
+            palette: palette,
             obscureText: true,
             icon: Icons.lock_outline_rounded,
           ),
@@ -221,8 +219,8 @@ class _AuthCard extends StatelessWidget {
               onPressed: onConnexion,
               style: ElevatedButton.styleFrom(
                 minimumSize: const Size.fromHeight(48),
-                backgroundColor: const Color(0xFF2563EB),
-                foregroundColor: Colors.white,
+                backgroundColor: palette.primary,
+                foregroundColor: palette.accentTextOnPrimary,
                 textStyle: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
@@ -245,7 +243,7 @@ class _InputField extends StatelessWidget {
     required this.controller,
     required this.label,
     required this.hint,
-    required this.inputColor,
+    required this.palette,
     this.obscureText = false,
     this.icon,
   });
@@ -253,7 +251,7 @@ class _InputField extends StatelessWidget {
   final TextEditingController controller;
   final String label;
   final String hint;
-  final Color inputColor;
+  final AppPalette palette;
   final bool obscureText;
   final IconData? icon;
 
@@ -265,7 +263,7 @@ class _InputField extends StatelessWidget {
         Text(
           label,
           style: TextStyle(
-            color: Colors.white.withOpacity(0.7),
+            color: palette.textSecondary,
             fontSize: 14,
             fontWeight: FontWeight.w600,
           ),
@@ -273,22 +271,22 @@ class _InputField extends StatelessWidget {
         const SizedBox(height: 10),
         Container(
           decoration: BoxDecoration(
-            color: inputColor,
+            color: palette.mutedSurface,
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: Colors.white.withOpacity(0.06)),
+            border: Border.all(color: palette.border),
           ),
           child: TextField(
             controller: controller,
             obscureText: obscureText,
-            cursorColor: Colors.white,
-            style: const TextStyle(color: Colors.white, fontSize: 16),
+            cursorColor: palette.primary,
+            style: TextStyle(color: palette.textPrimary, fontSize: 16),
             decoration: InputDecoration(
               prefixIcon: icon != null
-                  ? Icon(icon, color: Colors.white.withOpacity(0.6))
+                  ? Icon(icon, color: palette.textMuted)
                   : null,
               border: InputBorder.none,
               hintText: hint,
-              hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
+              hintStyle: TextStyle(color: palette.textMuted),
               contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
             ),
           ),
@@ -297,4 +295,3 @@ class _InputField extends StatelessWidget {
     );
   }
 }
-
