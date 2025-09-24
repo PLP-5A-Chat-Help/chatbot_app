@@ -65,19 +65,6 @@ class User extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setNames({String? first, String? last}) {
-    if (first != null) firstName = first;
-    if (last != null) lastName = last;
-  }
-
-  void setEmail(String value) {
-    email = value;
-  }
-
-  void setAvatarPath(String? path) {
-    avatarPath = path;
-  }
-
   void clear() {
     accessToken = '';
     tokenType = '';
