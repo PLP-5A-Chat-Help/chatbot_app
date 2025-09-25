@@ -65,12 +65,6 @@ class _DiscussionPageState extends State<DiscussionPage> {
     }
   }
 
-  void _handleUserUpdated() {
-    if (mounted) {
-      setState(() {});
-    }
-  }
-
   Future<List<ConversationSubject>>?
   drawerData; // Données pour le Drawer (liste des sujets de conversation)
 
@@ -355,14 +349,14 @@ class _DiscussionPageState extends State<DiscussionPage> {
   /// Lance la récupération de la conversation
   void launchConversation() async {
     // Charge un objet Conversation
-    widget.conversation = Conversation(
+    final loadedConversation = Conversation(
       id: widget.conversation!.id,
       title: widget.titre,
       messages: [],
     );
 
     // Prépare l'URL pour la requête de récupération de la conversation
-    final uri = Uri.parse('$urlPrefix/chat/${widget.conversation!.id}');
+    final uri = Uri.parse('$urlPrefix/chat/${loadedConversation.id}');
     final request = http.MultipartRequest('GET', uri)
       ..headers['Authorization'] = 'Bearer ${user.accessToken}';
 
@@ -385,9 +379,12 @@ class _DiscussionPageState extends State<DiscussionPage> {
         }
 
         // Ajoute ces messages à la conversation
-        widget.conversation?.messages.addAll(messages);
+        loadedConversation.messages.addAll(messages);
 
-        setState(() {});
+        setState(() {
+          widget.conversation?.messages.clear();
+          widget.conversation?.messages.addAll(loadedConversation.messages);
+        });
         _scrollToBottom();
       } else {
         // En cas d'erreur, nous n'avons rien a traité côté client
@@ -752,6 +749,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
                       isDrawer: true,
                     ),
                   ),
+                ),
           onDrawerChanged: (isOpened) {
             if (isOpened) _onDrawerOpened();
           },
@@ -793,7 +791,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
                       ),
                     ],
                   ),
-          ),
+                ),
         );
       },
     );
@@ -1368,6 +1366,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
                       fontSize: isWide ? 15 : 14,
                     ),
                   ),
+                ),
         );
 
         return Padding(
@@ -1446,12 +1445,12 @@ class _DiscussionPageState extends State<DiscussionPage> {
           ),
           const SizedBox(height: 24),
           Text(
-            'Comment puis-je vous aider aujourd'hui ?',
+            'Comment puis-je vous aider aujourd\'hui ?',
             style: TextStyle(color: palette.textPrimary, fontSize: 20, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 12),
           Text(
-            'Commencez par poser une question ou décrivez le contexte dans lequel vous avez besoin d'aide.',
+            'Commencez par poser une question ou décrivez le contexte dans lequel vous avez besoin d\'aide.',
             textAlign: TextAlign.center,
             style: TextStyle(color: palette.textSecondary, fontSize: 14),
           ),
@@ -1728,10 +1727,6 @@ class _DiscussionPageState extends State<DiscussionPage> {
         ],
       ),
     );
-  }
-  String _buildReportFileName(String subject) {
-    final sanitized = subject.replaceAll(RegExp(r'[^a-zA-Z0-9]+'), '-').replaceAll(RegExp(r'-{2,}'), '-');
-    return '${sanitized.toLowerCase()}-rapport.pdf';
   }
 
   String _buildReportFileName(String subject) {

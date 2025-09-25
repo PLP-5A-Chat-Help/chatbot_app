@@ -498,7 +498,6 @@ class _MailReportDialogState extends State<_MailReportDialog> {
         canShowPaginationDialog: false,
         enableDoubleTapZooming: true,
         maxZoomLevel: _maxZoom,
-        minZoomLevel: _minZoom,
         pageLayoutMode: PdfPageLayoutMode.single,
       ),
     );
