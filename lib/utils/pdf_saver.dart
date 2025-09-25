@@ -38,7 +38,6 @@ Future<void> savePdf(Uint8List bytes, String filename, BuildContext context) asy
     );
   }
 }
-
 Future<String?> resolveDefaultDownloadDirectory() {
   return getDefaultDownloadDirectory();
 }

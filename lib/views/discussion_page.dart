@@ -9,7 +9,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'mails_page.dart';
 import 'settings_page.dart';
-
 import 'package:path/path.dart' as p;
 import 'package:http/http.dart' as http;
 import 'package:speech_to_text/speech_recognition_result.dart';
@@ -46,11 +45,16 @@ class DiscussionPage extends StatefulWidget {
 
 class _DiscussionPageState extends State<DiscussionPage> {
   // Variables
-  GlobalKey<ScaffoldState> scaffoldKey = GlobalKey<ScaffoldState>(); // Clé pour le Scaffold (utile pour gérer le Drawer)
-  TextEditingController inputController = TextEditingController(); // Contrôleur pour le champ de saisie de texte
+  GlobalKey<ScaffoldState> scaffoldKey =
+      GlobalKey<
+        ScaffoldState
+      >(); // Clé pour le Scaffold (utile pour gérer le Drawer)
+  TextEditingController inputController =
+      TextEditingController(); // Contrôleur pour le champ de saisie de texte
   final TextEditingController subjectSearchController = TextEditingController();
   String subjectSearch = "";
-  late final ScrollController _scrollController; // Contrôleur pour le défilement de la liste des messages
+  late final ScrollController
+  _scrollController; // Contrôleur pour le défilement de la liste des messages
   bool researchMode = false; // true = recherche web, false = recherche locale
   List<File> files = []; // Liste des fichiers sélectionnés
   bool isLoading = false; // Indique si une requête est en cours (animation)
@@ -61,17 +65,36 @@ class _DiscussionPageState extends State<DiscussionPage> {
     }
   }
 
-  Future<List<ConversationSubject>>? drawerData; // Données pour le Drawer (liste des sujets de conversation)
+  Future<List<ConversationSubject>>?
+  drawerData; // Données pour le Drawer (liste des sujets de conversation)
 
   // Liste des émotions disponibles pour les messages du bot
-  final listeEmotions = ["naturel","amoureux","colère","détective","effrayant","endormi","fatigué","heureux","inquiet","intello","pensif","professeur","soulagé","surpris","triste"];
+  final listeEmotions = [
+    "naturel",
+    "amoureux",
+    "colère",
+    "détective",
+    "effrayant",
+    "endormi",
+    "fatigué",
+    "heureux",
+    "inquiet",
+    "intello",
+    "pensif",
+    "professeur",
+    "soulagé",
+    "surpris",
+    "triste",
+  ];
 
   // Instance de SpeechToText pour la reconnaissance vocale
   final SpeechToText _speechToText = SpeechToText();
   bool isListeningMic = false; // Indique si le microphone est en écoute
-  bool _speechEnabled = false; // Indique si la reconnaissance vocale est activée
+  bool _speechEnabled =
+      false; // Indique si la reconnaissance vocale est activée
   bool _isListening = false; // Indique si la reconnaissance vocale est en cours
-  String _currentText = ""; // Texte actuel saisi dans le champ de saisie (pour ajouter le texte reconnu à la suite de ce qui est déjà écrit)
+  String _currentText =
+      ""; // Texte actuel saisi dans le champ de saisie (pour ajouter le texte reconnu à la suite de ce qui est déjà écrit)
 
   // Initialisation de l'utilisateur
   @override
@@ -105,7 +128,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
     }
 
     // Charge le SpeechToText si l'application est sur Android
-    if(Platform.isAndroid) {
+    if (Platform.isAndroid) {
       _initSpeech();
     }
   }
@@ -126,7 +149,6 @@ class _DiscussionPageState extends State<DiscussionPage> {
   }
 
   bool get _canSendMessage => inputController.text.trim().isNotEmpty && !isLoading;
-
 
   /// Fonction pour descendre en bas de la liste des messages
   void _scrollToBottom() {
@@ -245,8 +267,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
 
   /// Initialise le SpeechToText
   Future<void> _initSpeech() async {
-    _speechEnabled = await _speechToText.initialize(
-    );
+    _speechEnabled = await _speechToText.initialize();
     setState(() {});
   }
 
@@ -290,7 +311,8 @@ class _DiscussionPageState extends State<DiscussionPage> {
     // Prépare l'URL pour la requête de suppression
     final uri = Uri.parse('$urlPrefix/delete_conversation/$id');
     // Ajout du bearer token pour l'authentification
-    final request = http.MultipartRequest('POST', uri)..headers['Authorization'] = 'Bearer ${user.accessToken}';
+    final request = http.MultipartRequest('POST', uri)
+      ..headers['Authorization'] = 'Bearer ${user.accessToken}';
 
     try {
       // Envoie la requête de suppression
@@ -304,7 +326,13 @@ class _DiscussionPageState extends State<DiscussionPage> {
           drawerData = Future.value(sujets);
           if (id == widget.conversation?.id) {
             // Si la conversation supprimée est celle en cours, on redirige vers une nouvelle discussion
-            Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => DiscussionPage(titre: "", conversation: null)));
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder:
+                    (context) => DiscussionPage(titre: "", conversation: null),
+              ),
+            );
           } else {
             setState(() {});
           }
@@ -321,11 +349,16 @@ class _DiscussionPageState extends State<DiscussionPage> {
   /// Lance la récupération de la conversation
   void launchConversation() async {
     // Charge un objet Conversation
-    widget.conversation = Conversation(id: widget.conversation!.id, title: widget.titre, messages: []);
+    final loadedConversation = Conversation(
+      id: widget.conversation!.id,
+      title: widget.titre,
+      messages: [],
+    );
 
     // Prépare l'URL pour la requête de récupération de la conversation
-    final uri = Uri.parse('$urlPrefix/chat/${widget.conversation!.id}');
-    final request = http.MultipartRequest('GET', uri)..headers['Authorization'] = 'Bearer ${user.accessToken}';
+    final uri = Uri.parse('$urlPrefix/chat/${loadedConversation.id}');
+    final request = http.MultipartRequest('GET', uri)
+      ..headers['Authorization'] = 'Bearer ${user.accessToken}';
 
     try {
       // Envoie la requête pour récupérer la conversation
@@ -346,9 +379,12 @@ class _DiscussionPageState extends State<DiscussionPage> {
         }
 
         // Ajoute ces messages à la conversation
-        widget.conversation?.messages.addAll(messages);
+        loadedConversation.messages.addAll(messages);
 
-        setState(() {});
+        setState(() {
+          widget.conversation?.messages.clear();
+          widget.conversation?.messages.addAll(loadedConversation.messages);
+        });
         _scrollToBottom();
       } else {
         // En cas d'erreur, nous n'avons rien a traité côté client
@@ -364,7 +400,8 @@ class _DiscussionPageState extends State<DiscussionPage> {
   void logout() async {
     // Préparer l'URL pour la requête de déconnexion
     final uri = Uri.parse('$urlPrefix/logout');
-    final request = http.MultipartRequest('POST', uri)..headers['Authorization'] = 'Bearer ${user.accessToken}';
+    final request = http.MultipartRequest('POST', uri)
+      ..headers['Authorization'] = 'Bearer ${user.accessToken}';
     try {
       final response = await request.send();
       if (response.statusCode == 200) {
@@ -392,7 +429,10 @@ class _DiscussionPageState extends State<DiscussionPage> {
       final request = await client.getUrl(url);
       request.headers.set(HttpHeaders.contentTypeHeader, "application/json");
       // Ajout du token d'authentification
-      request.headers.set(HttpHeaders.authorizationHeader, "Bearer ${user.accessToken}");
+      request.headers.set(
+        HttpHeaders.authorizationHeader,
+        "Bearer ${user.accessToken}",
+      );
 
       final response = await request.close();
 
@@ -402,16 +442,21 @@ class _DiscussionPageState extends State<DiscussionPage> {
         final responseBody = await response.transform(utf8.decoder).join();
         final List<dynamic> data = jsonDecode(responseBody);
         // Convertit la liste JSON en liste d'objets ConversationSubject
-        List<ConversationSubject> listeSujets = data.map((json) => ConversationSubject.fromJson(json)).toList();
+        List<ConversationSubject> listeSujets =
+            data.map((json) => ConversationSubject.fromJson(json)).toList();
         // Trie la liste des sujets par date de dernière mise à jour
         listeSujets.sort(
-          (a, b) => b.lastUpdate.compareTo(a.lastUpdate), // Tri par date de dernière mise à jour, du plus récent au plus ancien
+          (a, b) => b.lastUpdate.compareTo(
+            a.lastUpdate,
+          ), // Tri par date de dernière mise à jour, du plus récent au plus ancien
         );
         return listeSujets;
       } else {
         //print("Erreur lors de la récupération des sujets : ${response.statusCode}");
         // En cas d'erreur, nous la faisons remonter
-        throw Exception("Erreur lors de la récupération des sujets : ${response.statusCode}");
+        throw Exception(
+          "Erreur lors de la récupération des sujets : ${response.statusCode}",
+        );
       }
     } catch (e) {
       //print("Exception pendant la récupération : $e");
@@ -458,7 +503,11 @@ class _DiscussionPageState extends State<DiscussionPage> {
         widget.conversation?.addMessage("user", message, "");
       }
       isLoading = true;
-      widget.conversation?.messages.add(["system", "loading", ""]); // message temporaire pour l'animation
+      widget.conversation?.messages.add([
+        "system",
+        "loading",
+        "",
+      ]); // message temporaire pour l'animation
     });
     _scrollToBottom();
 
@@ -476,7 +525,12 @@ class _DiscussionPageState extends State<DiscussionPage> {
     for (var file in files) {
       final fileStream = http.ByteStream(file.openRead());
       final fileLength = await file.length();
-      final multipartFile = http.MultipartFile('files', fileStream, fileLength, filename: p.basename(file.path));
+      final multipartFile = http.MultipartFile(
+        'files',
+        fileStream,
+        fileLength,
+        filename: p.basename(file.path),
+      );
       request.files.add(multipartFile);
     }
 
@@ -496,11 +550,13 @@ class _DiscussionPageState extends State<DiscussionPage> {
         final responseBody = await response.stream.bytesToString();
         final json = jsonDecode(responseBody);
 
-        if(context.mounted) {
+        if (context.mounted) {
           final String conversationId = json['conversation_id'].toString();
           final String responseText = json['response'].toString();
           final String title = json['title'].toString();
-          final String emotion = (json['emotion'] ?? 'naturel').toString().replaceAll("#", "");
+          final String emotion = (json['emotion'] ?? 'naturel')
+              .toString()
+              .replaceAll("#", "");
 
           if (widget.conversation?.id == "-1") {
             // Si la conversation est nouvelle, on lui donne un ID reçu
@@ -510,9 +566,15 @@ class _DiscussionPageState extends State<DiscussionPage> {
           setState(() {
             isLoading = false;
             // Remplace le "loading" par la vraie réponse
-            final firstIndex = widget.conversation!.messages.indexWhere((msg) => msg[0] == "system" && msg[1] == "loading");
+            final firstIndex = widget.conversation!.messages.indexWhere(
+              (msg) => msg[0] == "system" && msg[1] == "loading",
+            );
             if (firstIndex != -1) {
-              widget.conversation!.messages[firstIndex] = ["assistant", responseText, emotion];
+              widget.conversation!.messages[firstIndex] = [
+                "assistant",
+                responseText,
+                emotion,
+              ];
               if (widget.conversation?.title == "") {
                 // Si le titre de la conversation est vide, on le met à jour
                 widget.conversation?.title = title;
@@ -520,32 +582,42 @@ class _DiscussionPageState extends State<DiscussionPage> {
             }
           });
         }
-
       } else {
         // Message d'erreur
         //print("Erreur lors de la récupération des messages : ${response.statusCode}");
-        if(context.mounted) {
+        if (context.mounted) {
           setState(() {
             isLoading = false;
             // Remplace le "loading" par un message d'erreur
-            final firstIndex = widget.conversation!.messages.indexWhere((msg) => msg[0] == "system" && msg[1] == "loading");
+            final firstIndex = widget.conversation!.messages.indexWhere(
+              (msg) => msg[0] == "system" && msg[1] == "loading",
+            );
             if (firstIndex != -1) {
-              widget.conversation!.messages[firstIndex] = ["assistant", "Erreur lors de la récupération des messages", ""];
+              widget.conversation!.messages[firstIndex] = [
+                "assistant",
+                "Erreur lors de la récupération des messages",
+                "",
+              ];
             }
           });
         }
-
       }
     } catch (e) {
       // Exception : message d'erreur
       //print("Exception pendant la récupération : $e");
-      if(context.mounted) {
+      if (context.mounted) {
         setState(() {
           isLoading = false;
           // Remplace le "loading" par un message d'erreur
-          final lastIndex = widget.conversation!.messages.lastIndexWhere((msg) => msg[0] == "system" && msg[1] == "loading");
+          final lastIndex = widget.conversation!.messages.lastIndexWhere(
+            (msg) => msg[0] == "system" && msg[1] == "loading",
+          );
           if (lastIndex != -1) {
-            widget.conversation!.messages[lastIndex] = ["assistant", "Erreur lors de la récupération des messages", ""];
+            widget.conversation!.messages[lastIndex] = [
+              "assistant",
+              "Erreur lors de la récupération des messages",
+              "",
+            ];
           }
         });
       }
@@ -555,7 +627,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
   /// Active ou désactive le mode de recherche avancée
   void switchResearchMode() {
     // Si il y a des fichiers, on ne peut pas activer la recherche web
-    if(!researchMode && files.isNotEmpty) {
+    if (!researchMode && files.isNotEmpty) {
       // Si on est en mode recherche web et qu'il y a des fichiers, on affiche un message d'avertissement
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
@@ -586,12 +658,18 @@ class _DiscussionPageState extends State<DiscussionPage> {
       SnackBar(
         content: Row(
           children: [
-            Icon(researchMode ? Icons.check_circle_outline : Icons.highlight_off, color: researchMode ? Colors.white : Colors.white, size: 30),
+            Icon(
+              researchMode ? Icons.check_circle_outline : Icons.highlight_off,
+              color: researchMode ? Colors.white : Colors.white,
+              size: 30,
+            ),
             const SizedBox(width: 20),
             SizedBox(
               width: MediaQuery.of(context).size.width - 100,
               child: AutoSizeText(
-                researchMode ? "Recherche avancée via Internet activée" : "Recherche avancée via Internet désactivée",
+                researchMode
+                    ? "Recherche avancée via Internet activée"
+                    : "Recherche avancée via Internet désactivée",
                 style: const TextStyle(color: Colors.white, fontSize: 20),
                 maxLines: 1,
                 maxFontSize: 20,
@@ -609,12 +687,19 @@ class _DiscussionPageState extends State<DiscussionPage> {
   /// Sélectionne des fichiers à envoyer
   Future<void> selectFiles() async {
     // Ouvre le sélecteur de fichiers
-    FilePickerResult? result = await FilePicker.platform.pickFiles(allowMultiple: true, type: FileType.custom, allowedExtensions: ['txt', 'pdf', 'markdown', 'md']);
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      allowMultiple: true,
+      type: FileType.custom,
+      allowedExtensions: ['txt', 'pdf', 'markdown', 'md'],
+    );
 
     if (result != null) {
-      List<File> selectedFiles = result.paths.map((path) => File(path!)).toList();
+      List<File> selectedFiles =
+          result.paths.map((path) => File(path!)).toList();
       for (File f in selectedFiles) {
-        if (await f.length() > 24000000 || files.length >= 4 || files.any((file) => file.path == f.path)) {
+        if (await f.length() > 24000000 ||
+            files.length >= 4 ||
+            files.any((file) => file.path == f.path)) {
           // Si le fichier est déjà dans la liste ou qu'on a déjà 4 fichiers, on ne l'ajoute pas
           continue;
         } else {
@@ -760,7 +845,10 @@ class _DiscussionPageState extends State<DiscussionPage> {
                   },
                   borderRadius: BorderRadius.circular(20),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 16,
+                    ),
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [palette.primary, palette.secondary],
@@ -871,10 +959,13 @@ class _DiscussionPageState extends State<DiscussionPage> {
                 }
 
                 final sujets = snapshot.data!;
-                final filteredSubjects = sujets.where((subject) {
-                  if (subjectSearch.isEmpty) return true;
-                  return subject.titre.toLowerCase().contains(subjectSearch.toLowerCase());
-                }).toList();
+                final filteredSubjects =
+                    sujets.where((subject) {
+                      if (subjectSearch.isEmpty) return true;
+                      return subject.titre.toLowerCase().contains(
+                        subjectSearch.toLowerCase(),
+                      );
+                    }).toList();
 
                 if (filteredSubjects.isEmpty) {
                   return Center(
@@ -893,6 +984,12 @@ class _DiscussionPageState extends State<DiscussionPage> {
                     final subject = filteredSubjects[index];
                     final isActive = widget.conversation?.id == subject.id;
                     final formattedDate = _formatDate(subject.lastUpdate);
+                    final backgroundColor = isActive
+                        ? palette.primary.withOpacity(0.16)
+                        : palette.surface;
+                    final borderColor = isActive
+                        ? palette.primary.withOpacity(0.35)
+                        : palette.border;
 
                     final backgroundColor = isActive
                         ? palette.primary.withOpacity(0.16)
@@ -1153,11 +1250,16 @@ class _DiscussionPageState extends State<DiscussionPage> {
   Widget _buildMessagesList({required bool isWide, required AppPalette palette}) {
     return ListView.builder(
       controller: _scrollController,
-      padding: EdgeInsets.symmetric(horizontal: isWide ? 24 : 16, vertical: isWide ? 24 : 20),
+      padding: EdgeInsets.symmetric(
+        horizontal: isWide ? 24 : 16,
+        vertical: isWide ? 24 : 20,
+      ),
       itemCount: widget.conversation?.messages.length ?? 0,
       itemBuilder: (context, index) {
         final messageData = widget.conversation?.messages[index];
-        if (messageData == null || messageData.isEmpty || messageData[0] == 'file') {
+        if (messageData == null ||
+            messageData.isEmpty ||
+            messageData[0] == 'file') {
           return const SizedBox.shrink();
         }
 
@@ -1168,6 +1270,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
         var emotion = 'naturel';
         if (messageData.length >= 3) {
           final rawEmotion = messageData[2];
+          // ignore: unnecessary_type_check
           if (rawEmotion is String && rawEmotion.isNotEmpty) {
             emotion = rawEmotion;
           }
@@ -1176,8 +1279,13 @@ class _DiscussionPageState extends State<DiscussionPage> {
         final isLoadingMessage = messageContent == 'loading';
 
         final bubble = Container(
-          constraints: BoxConstraints(maxWidth: isWide ? 540 : MediaQuery.of(context).size.width * 0.8),
-          padding: EdgeInsets.symmetric(horizontal: isWide ? 20 : 16, vertical: isWide ? 18 : 14),
+          constraints: BoxConstraints(
+            maxWidth: isWide ? 540 : MediaQuery.of(context).size.width * 0.8,
+          ),
+          padding: EdgeInsets.symmetric(
+            horizontal: isWide ? 20 : 16,
+            vertical: isWide ? 18 : 14,
+          ),
           decoration: BoxDecoration(
             gradient: isUser
                 ? const LinearGradient(
@@ -1272,7 +1380,8 @@ class _DiscussionPageState extends State<DiscussionPage> {
           padding: const EdgeInsets.symmetric(vertical: 12),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+            mainAxisAlignment:
+                isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
             children: [
               if (isBot) ...[
                 _buildEmotionAvatar(palette, emotion),
@@ -1343,7 +1452,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
           ),
           const SizedBox(height: 24),
           Text(
-            'Comment puis-je vous aider aujourd'hui ?',
+            'Comment puis-je vous aider aujourd\'hui ?',
             style: TextStyle(color: palette.textPrimary, fontSize: 20, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 12),
@@ -1444,7 +1553,12 @@ class _DiscussionPageState extends State<DiscussionPage> {
 
   Widget _buildInputBar({required bool isWide, required AppPalette palette}) {
     return Padding(
-      padding: EdgeInsets.fromLTRB(isWide ? 36 : 16, 20, isWide ? 36 : 16, isWide ? 32 : 24),
+      padding: EdgeInsets.fromLTRB(
+        isWide ? 36 : 16,
+        20,
+        isWide ? 36 : 16,
+        isWide ? 32 : 24,
+      ),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
         decoration: BoxDecoration(
@@ -1629,6 +1743,13 @@ class _DiscussionPageState extends State<DiscussionPage> {
   }
   String _buildReportFileName(String subject) {
     final sanitized = subject.replaceAll(RegExp(r'[^a-zA-Z0-9]+'), '-').replaceAll(RegExp(r'-{2,}'), '-');
+    return '${sanitized.toLowerCase()}-rapport.pdf';
+  }
+
+  String _buildReportFileName(String subject) {
+    final sanitized = subject
+        .replaceAll(RegExp(r'[^a-zA-Z0-9]+'), '-')
+        .replaceAll(RegExp(r'-{2,}'), '-');
     return '${sanitized.toLowerCase()}-rapport.pdf';
   }
 

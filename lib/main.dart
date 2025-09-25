@@ -22,7 +22,6 @@ void main() {
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
-
   ThemeData _buildDarkTheme() {
     const baseScheme = ColorScheme.dark(
       primary: Color(0xFF2563EB),
@@ -41,6 +40,7 @@ class MyApp extends StatelessWidget {
       ),
     );
   }
+
 
   ThemeData _buildLightTheme() {
     const baseScheme = ColorScheme.light(
