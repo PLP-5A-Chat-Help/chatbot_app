@@ -1,3 +1,4 @@
+
 import 'dart:typed_data';
 
 import 'package:flutter/gestures.dart';
@@ -208,7 +209,6 @@ class _MailCard extends StatelessWidget {
   final AppPalette palette;
   final VoidCallback onOpenReport;
   final VoidCallback? onStartConversation;
-
   String get formattedDate {
     final day = mail.analyzedAt.day.toString().padLeft(2, '0');
     final month = mail.analyzedAt.month.toString().padLeft(2, '0');
