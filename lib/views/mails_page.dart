@@ -553,7 +553,6 @@ class _MailReportDialogState extends State<_MailReportDialog> {
         enableDoubleTapZooming: true,
         interactionMode: PdfInteractionMode.pan,
         maxZoomLevel: _maxZoom,
-        minZoomLevel: _minZoom,
         pageLayoutMode: PdfPageLayoutMode.single,
       ),
     );

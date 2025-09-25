@@ -35,6 +35,10 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> connexion() async {
+         Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => DiscussionPage.empty()),
+        );
     setState(() {
       messageErreur = "";
     });
@@ -86,10 +90,7 @@ class _HomePageState extends State<HomePage> {
         passwordController.clear();
 
         if (!mounted) return;
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => DiscussionPage.empty()),
-        );
+   
       } else {
         setState(() {
           messageErreur = "Erreur lors de la connexion : ${response.statusCode}";

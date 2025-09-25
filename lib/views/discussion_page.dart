@@ -985,17 +985,10 @@ class _DiscussionPageState extends State<DiscussionPage> {
                     final isActive = widget.conversation?.id == subject.id;
                     final formattedDate = _formatDate(subject.lastUpdate);
                     final backgroundColor = isActive
-                        ? palette.primary.withOpacity(0.16)
+                        ? palette.primary.withValues(alpha: 0.16)
                         : palette.surface;
                     final borderColor = isActive
-                        ? palette.primary.withOpacity(0.35)
-                        : palette.border;
-
-                    final backgroundColor = isActive
-                        ? palette.primary.withOpacity(0.16)
-                        : palette.surface;
-                    final borderColor = isActive
-                        ? palette.primary.withOpacity(0.35)
+                        ? palette.primary.withValues(alpha: 0.35)
                         : palette.border;
 
                     return GestureDetector(
@@ -1457,7 +1450,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
           ),
           const SizedBox(height: 12),
           Text(
-            'Commencez par poser une question ou décrivez le contexte dans lequel vous avez besoin d'aide.',
+            'Commencez par poser une question ou décrivez le contexte dans lequel vous avez besoin d\'aide.',
             textAlign: TextAlign.center,
             style: TextStyle(color: palette.textSecondary, fontSize: 14),
           ),
@@ -1617,7 +1610,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
                 child: _buildInputIcon(
                   palette,
                   icon: isListeningMic ? Icons.stop : Icons.mic,
-                  tooltip: isListeningMic ? 'Arrêter l'écoute' : 'Dicter un message',
+                  tooltip: isListeningMic ? 'Arrêter l\'écoute' : 'Dicter un message',
                   onTap: () {
                     if (_speechEnabled && !_isListening) {
                       setState(() {
@@ -1743,13 +1736,6 @@ class _DiscussionPageState extends State<DiscussionPage> {
   }
   String _buildReportFileName(String subject) {
     final sanitized = subject.replaceAll(RegExp(r'[^a-zA-Z0-9]+'), '-').replaceAll(RegExp(r'-{2,}'), '-');
-    return '${sanitized.toLowerCase()}-rapport.pdf';
-  }
-
-  String _buildReportFileName(String subject) {
-    final sanitized = subject
-        .replaceAll(RegExp(r'[^a-zA-Z0-9]+'), '-')
-        .replaceAll(RegExp(r'-{2,}'), '-');
     return '${sanitized.toLowerCase()}-rapport.pdf';
   }
 
