@@ -791,7 +791,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
                       ),
                     ],
                   ),
-                ),
+          ),
         );
       },
     );
@@ -984,6 +984,13 @@ class _DiscussionPageState extends State<DiscussionPage> {
                     final subject = filteredSubjects[index];
                     final isActive = widget.conversation?.id == subject.id;
                     final formattedDate = _formatDate(subject.lastUpdate);
+                    final backgroundColor = isActive
+                        ? palette.primary.withOpacity(0.16)
+                        : palette.surface;
+                    final borderColor = isActive
+                        ? palette.primary.withOpacity(0.35)
+                        : palette.border;
+
                     final backgroundColor = isActive
                         ? palette.primary.withOpacity(0.16)
                         : palette.surface;
@@ -1450,7 +1457,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
           ),
           const SizedBox(height: 12),
           Text(
-            'Commencez par poser une question ou décrivez le contexte dans lequel vous avez besoin d\'aide.',
+            'Commencez par poser une question ou décrivez le contexte dans lequel vous avez besoin d'aide.',
             textAlign: TextAlign.center,
             style: TextStyle(color: palette.textSecondary, fontSize: 14),
           ),
@@ -1461,21 +1468,28 @@ class _DiscussionPageState extends State<DiscussionPage> {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 12),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('- Connectez-vous à votre boîte mail.', style: TextStyle(color: palette.textSecondary, fontSize: 14)),
-                const SizedBox(height: 6),
-                Text('- Transférez l\'email à analyser à l\'adresse "plp.chaton@gmail.com".',
-                    style: TextStyle(color: palette.textSecondary, fontSize: 14)),
-                const SizedBox(height: 6),
-                Text('- Consultez le résultat directement dans cette application.',
-                    style: TextStyle(color: palette.textSecondary, fontSize: 14)),
-              ],
-            ),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Text(
+                '1. Connectez-vous à votre boîte mail.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: palette.textSecondary, fontSize: 14),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '2. Transférez l\'email à analyser à l\'adresse "plp.chaton@gmail.com".',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: palette.textSecondary, fontSize: 14),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '3. Consultez le résultat directement dans cette application.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: palette.textSecondary, fontSize: 14),
+              ),
+            ],
           ),
         ],
       ),
@@ -1603,8 +1617,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
                 child: _buildInputIcon(
                   palette,
                   icon: isListeningMic ? Icons.stop : Icons.mic,
-
-                  tooltip: isListeningMic ? 'Arrêter l\'écoute' : 'Dicter un message',
+                  tooltip: isListeningMic ? 'Arrêter l'écoute' : 'Dicter un message',
                   onTap: () {
                     if (_speechEnabled && !_isListening) {
                       setState(() {
@@ -1727,6 +1740,10 @@ class _DiscussionPageState extends State<DiscussionPage> {
         ],
       ),
     );
+  }
+  String _buildReportFileName(String subject) {
+    final sanitized = subject.replaceAll(RegExp(r'[^a-zA-Z0-9]+'), '-').replaceAll(RegExp(r'-{2,}'), '-');
+    return '${sanitized.toLowerCase()}-rapport.pdf';
   }
 
   String _buildReportFileName(String subject) {

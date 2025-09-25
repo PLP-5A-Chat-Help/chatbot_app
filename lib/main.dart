@@ -41,6 +41,7 @@ class MyApp extends StatelessWidget {
     );
   }
 
+
   ThemeData _buildLightTheme() {
     const baseScheme = ColorScheme.light(
       primary: Color(0xFF2563EB),

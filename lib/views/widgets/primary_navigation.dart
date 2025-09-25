@@ -52,7 +52,7 @@ class PrimaryNavigation extends StatelessWidget {
       builder: (context, _) {
         final avatarImage = resolveAvatarImage(user.avatarPath);
         final initials = user.username.isNotEmpty ? user.username[0].toUpperCase() : 'U';
-        return CircleAvatar(
+        final circle = CircleAvatar(
           radius: 22,
           backgroundColor: palette.mutedSurface,
           backgroundImage: avatarImage,
@@ -65,6 +65,19 @@ class PrimaryNavigation extends StatelessWidget {
                   ),
                 )
               : null,
+        );
+
+        return Material(
+          color: Colors.transparent,
+          shape: const CircleBorder(),
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: onSettingsPressed,
+            child: Padding(
+              padding: const EdgeInsets.all(4),
+              child: circle,
+            ),
+          ),
         );
       },
     );

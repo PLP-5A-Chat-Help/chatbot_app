@@ -19,12 +19,22 @@ Future<void> savePdf(Uint8List bytes, String filename, BuildContext context) asy
         ? 'Rapport enregistré dans :\n$savedPath'
         : 'Téléchargement du rapport démarré';
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(24),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      ),
     );
   } catch (e) {
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Impossible d\'enregistrer le rapport : $e')),
+      SnackBar(
+        content: Text('Impossible d\'enregistrer le rapport : $e'),
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(24),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      ),
     );
   }
 }
