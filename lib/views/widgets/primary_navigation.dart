@@ -128,16 +128,13 @@ class PrimaryNavigation extends StatelessWidget {
   }
 
   Widget _buildLogo() {
-    return Container(
+    return SizedBox(
       width: 48,
       height: 48,
-      decoration: BoxDecoration(
-        color: palette.mutedSurface,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(10),
-        child: Image.asset('assets/logo.png', fit: BoxFit.contain),
+      child: Image.asset(
+        'assets/logo.png',
+        fit: BoxFit.contain,
+        filterQuality: FilterQuality.high,
       ),
     );
   }

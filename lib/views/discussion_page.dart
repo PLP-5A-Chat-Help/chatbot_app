@@ -1190,7 +1190,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
                     ],
                   ),
                 ),
-                if (isLoading)
+                if (isWide && isLoading)
                   _buildStatusChip(palette, 'Réponse en cours...'),
                 if (!isWide) const SizedBox(width: 8),
                 _buildHeaderAction(
