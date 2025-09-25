@@ -288,35 +288,30 @@ class _MailCard extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 10),
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: Text(
-                                mail.summary,
-                                style: TextStyle(
-                                  color: palette.textSecondary,
-                                  fontSize: 13.5,
-                                  height: 1.35,
-                                ),
-                              ),
-                            ),
-                            if (isWide && onStartConversation != null) ...[
-                              const SizedBox(width: 16),
-                              _ConversationButton(
-                                palette: palette,
-                                onPressed: onStartConversation!,
-                              ),
-                            ],
-                          ],
+                        Text(
+                          mail.summary,
+                          style: TextStyle(
+                            color: palette.textSecondary,
+                            fontSize: 13.5,
+                            height: 1.35,
+                          ),
                         ),
                       ],
                     ),
                   ),
                   const SizedBox(width: 12),
-                  Align(
-                    alignment: Alignment.topRight,
-                    child: _ScoreBadge(palette: palette, score: mail.maliciousnessScore),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      _ScoreBadge(palette: palette, score: mail.maliciousnessScore),
+                      if (isWide && onStartConversation != null) ...[
+                        const SizedBox(height: 12),
+                        _ConversationButton(
+                          palette: palette,
+                          onPressed: onStartConversation!,
+                        ),
+                      ],
+                    ],
                   ),
                 ],
               ),
