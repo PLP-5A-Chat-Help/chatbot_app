@@ -32,15 +32,8 @@ import 'widgets/primary_navigation.dart';
 /// Page de discussion
 /// Cette page permet à l'utilisateur de discuter avec le chatbot.
 class DiscussionPage extends StatefulWidget {
-  DiscussionPage({
-    super.key,
-    required this.titre,
-    required this.conversation,
-    this.initialReport,
-  });
-  DiscussionPage.empty({super.key, this.initialReport})
-    : titre = "",
-      conversation = null;
+  DiscussionPage({super.key, required this.titre, required this.conversation, this.initialReport});
+  DiscussionPage.empty({super.key, this.initialReport}) : titre = "", conversation = null;
 
   final String titre; // Titre de la discussion
   Conversation? conversation;
@@ -65,6 +58,12 @@ class _DiscussionPageState extends State<DiscussionPage> {
   bool researchMode = false; // true = recherche web, false = recherche locale
   List<File> files = []; // Liste des fichiers sélectionnés
   bool isLoading = false; // Indique si une requête est en cours (animation)
+  
+  void _handleUserUpdated() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
 
   void _handleUserUpdated() {
     if (mounted) {
@@ -155,8 +154,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
     setState(() {});
   }
 
-  bool get _canSendMessage =>
-      inputController.text.trim().isNotEmpty && !isLoading;
+  bool get _canSendMessage => inputController.text.trim().isNotEmpty && !isLoading;
 
   /// Fonction pour descendre en bas de la liste des messages
   void _scrollToBottom() {
@@ -171,18 +169,14 @@ class _DiscussionPageState extends State<DiscussionPage> {
     try {
       final bytes = await MailReportGenerator.buildReport(mail);
       final directory = await getTemporaryDirectory();
-      final file = File(
-        p.join(directory.path, _buildReportFileName(mail.subject)),
-      );
+      final file = File(p.join(directory.path, _buildReportFileName(mail.subject)));
       await file.writeAsBytes(bytes, flush: true);
       if (!mounted) return;
       setState(() {
         files.add(file);
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Rapport "${mail.subject}" attaché à la conversation.'),
-        ),
+        SnackBar(content: Text('Rapport "${mail.subject}" attaché à la conversation.')),
       );
     } catch (e) {
       if (!mounted) return;
@@ -198,36 +192,83 @@ class _DiscussionPageState extends State<DiscussionPage> {
       PageRouteBuilder(
         transitionDuration: Duration.zero,
         reverseTransitionDuration: Duration.zero,
-        pageBuilder:
-            (_, __, ___) => MailsPage(
-              onStartConversation: (mailContext, mail) {
-                Navigator.of(mailContext).push(
-                  PageRouteBuilder(
-                    transitionDuration: Duration.zero,
-                    reverseTransitionDuration: Duration.zero,
-                    pageBuilder:
-                        (_, __, ___) => DiscussionPage(
-                          titre: mail.subject,
-                          conversation: null,
-                          initialReport: mail,
-                        ),
-                  ),
-                );
-              },
-            ),
+        pageBuilder: (_, __, ___) => MailsPage(
+          onStartConversation: (mailContext, mail) {
+            Navigator.of(mailContext).push(
+              PageRouteBuilder(
+                transitionDuration: Duration.zero,
+                reverseTransitionDuration: Duration.zero,
+                pageBuilder: (_, __, ___) => DiscussionPage(
+                  titre: mail.subject,
+                  conversation: null,
+                  initialReport: mail,
+                ),
+              ),
+            );
+          },
+          onOpenChat: () {
+            navigator.pushAndRemoveUntil(
+              PageRouteBuilder(
+                transitionDuration: Duration.zero,
+                reverseTransitionDuration: Duration.zero,
+                pageBuilder: (_, __, ___) => DiscussionPage.empty(),
+              ),
+              (route) => route.isFirst,
+            );
+          },
+          onOpenSettings: () {
+            navigator.pushReplacement(
+              PageRouteBuilder(
+                transitionDuration: Duration.zero,
+                reverseTransitionDuration: Duration.zero,
+                pageBuilder: (_, __, ___) => SettingsPage(
+                  onChatRequested: () {
+                    navigator.pushAndRemoveUntil(
+                      PageRouteBuilder(
+                        transitionDuration: Duration.zero,
+                        reverseTransitionDuration: Duration.zero,
+                        pageBuilder: (_, __, ___) => DiscussionPage.empty(),
+                      ),
+                      (route) => route.isFirst,
+                    );
+                  },
+                  onMailsRequested: () {
+                    _openMailsPage();
+                  },
+                ),
+              ),
+            );
+          },
+        ),
       ),
     );
   }
 
   void _openSettingsPage() {
-    Navigator.of(context).push(
+    final navigator = Navigator.of(context);
+    navigator.push(
       PageRouteBuilder(
         transitionDuration: Duration.zero,
         reverseTransitionDuration: Duration.zero,
-        pageBuilder: (_, __, ___) => const SettingsPage(),
+        pageBuilder: (_, __, ___) => SettingsPage(
+          onChatRequested: () {
+            navigator.pushAndRemoveUntil(
+              PageRouteBuilder(
+                transitionDuration: Duration.zero,
+                reverseTransitionDuration: Duration.zero,
+                pageBuilder: (_, __, ___) => DiscussionPage.empty(),
+              ),
+              (route) => route.isFirst,
+            );
+          },
+          onMailsRequested: () {
+            _openMailsPage();
+          },
+        ),
       ),
     );
   }
+
   // ---------------------------------- Speech-to-text ----------------------------------
 
   /// Initialise le SpeechToText
@@ -700,77 +741,73 @@ class _DiscussionPageState extends State<DiscussionPage> {
         return Scaffold(
           key: scaffoldKey,
           backgroundColor: palette.background,
-          drawer:
-              isWide
-                  ? null
-                  : Drawer(
-                    width: 320,
-                    backgroundColor: palette.surface,
-                    child: SafeArea(
-                      child: _buildConversationSidebar(
-                        palette: palette,
-                        isDrawer: true,
-                      ),
+          drawer: isWide
+              ? null
+              : Drawer(
+                  width: 320,
+                  backgroundColor: palette.surface,
+                  child: SafeArea(
+                    child: _buildConversationSidebar(
+                      palette: palette,
+                      isDrawer: true,
                     ),
                   ),
           onDrawerChanged: (isOpened) {
             if (isOpened) _onDrawerOpened();
           },
           body: SafeArea(
-            child:
-                isWide
-                    ? Row(
-                      children: [
-                        PrimaryNavigation(
+            child: isWide
+                ? Row(
+                    children: [
+                      PrimaryNavigation(
+                        palette: palette,
+                        activeIndex: 0,
+                        onChatPressed: null,
+                        onMailsPressed: _openMailsPage,
+                        onSettingsPressed: _openSettingsPage,
+                      ),
+                      _buildConversationSidebar(palette: palette),
+                      Expanded(
+                        child: _buildChatSection(
+                          isWide: true,
                           palette: palette,
-                          activeIndex: 0,
-                          onChatPressed: null,
-                          onMailsPressed: _openMailsPage,
-                          onSettingsPressed: _openSettingsPage,
                         ),
-                        _buildConversationSidebar(palette: palette),
-                        Expanded(
-                          child: _buildChatSection(
-                            isWide: true,
-                            palette: palette,
-                          ),
-                        ),
-                      ],
-                    )
-                    : Column(
-                      children: [
-                        PrimaryNavigation(
+                      ),
+                    ],
+                  )
+                : Column(
+                    children: [
+                      PrimaryNavigation(
+                        palette: palette,
+                        activeIndex: 0,
+                        isHorizontal: true,
+                        onChatPressed: null,
+                        onMailsPressed: _openMailsPage,
+                        onSettingsPressed: _openSettingsPage,
+                      ),
+                      Expanded(
+                        child: _buildChatSection(
+                          isWide: false,
                           palette: palette,
-                          activeIndex: 0,
-                          isHorizontal: true,
-                          onChatPressed: null,
-                          onMailsPressed: _openMailsPage,
-                          onSettingsPressed: _openSettingsPage,
                         ),
-                        Expanded(
-                          child: _buildChatSection(
-                            isWide: false,
-                            palette: palette,
-                          ),
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
+                  ),
           ),
         );
       },
     );
   }
-
-  Widget _buildConversationSidebar({
-    required AppPalette palette,
-    bool isDrawer = false,
-  }) {
+  Widget _buildConversationSidebar({required AppPalette palette, bool isDrawer = false}) {
     return Container(
       width: isDrawer ? double.infinity : 320,
       decoration: BoxDecoration(
         color: palette.surface,
-        border:
-            isDrawer ? null : Border(right: BorderSide(color: palette.border)),
+        border: isDrawer
+            ? null
+            : Border(
+                right: BorderSide(color: palette.border),
+              ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -791,7 +828,10 @@ class _DiscussionPageState extends State<DiscussionPage> {
                 const SizedBox(height: 6),
                 Text(
                   'Retrouvez facilement toutes vos conversations',
-                  style: TextStyle(color: palette.textSecondary, fontSize: 13),
+                  style: TextStyle(
+                    color: palette.textSecondary,
+                    fontSize: 13,
+                  ),
                 ),
                 const SizedBox(height: 20),
                 InkWell(
@@ -832,9 +872,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
                           width: 36,
                           height: 36,
                           decoration: BoxDecoration(
-                            color: palette.accentTextOnPrimary.withOpacity(
-                              0.18,
-                            ),
+                            color: palette.accentTextOnPrimary.withOpacity(0.18),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: const Icon(Icons.add, color: Colors.white),
@@ -900,9 +938,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return Center(
-                    child: CircularProgressIndicator(
-                      color: palette.primary.withOpacity(0.5),
-                    ),
+                    child: CircularProgressIndicator(color: palette.primary.withOpacity(0.5)),
                   );
                 } else if (snapshot.hasError) {
                   return Center(
@@ -910,10 +946,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
                       padding: const EdgeInsets.symmetric(horizontal: 24),
                       child: Text(
                         '${snapshot.error}',
-                        style: TextStyle(
-                          color: palette.textSecondary,
-                          fontSize: 14,
-                        ),
+                        style: TextStyle(color: palette.textSecondary, fontSize: 14),
                         textAlign: TextAlign.center,
                       ),
                     ),
@@ -922,10 +955,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
                   return Center(
                     child: Text(
                       'Aucune conversation pour le moment',
-                      style: TextStyle(
-                        color: palette.textSecondary,
-                        fontSize: 15,
-                      ),
+                      style: TextStyle(color: palette.textSecondary, fontSize: 15),
                     ),
                   );
                 }
@@ -943,10 +973,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
                   return Center(
                     child: Text(
                       'Aucune conversation correspondante',
-                      style: TextStyle(
-                        color: palette.textSecondary,
-                        fontSize: 15,
-                      ),
+                      style: TextStyle(color: palette.textSecondary, fontSize: 15),
                     ),
                   );
                 }
@@ -959,15 +986,12 @@ class _DiscussionPageState extends State<DiscussionPage> {
                     final subject = filteredSubjects[index];
                     final isActive = widget.conversation?.id == subject.id;
                     final formattedDate = _formatDate(subject.lastUpdate);
-
-                    final backgroundColor =
-                        isActive
-                            ? palette.primary.withOpacity(0.16)
-                            : palette.surface;
-                    final borderColor =
-                        isActive
-                            ? palette.primary.withOpacity(0.35)
-                            : palette.border;
+                    final backgroundColor = isActive
+                        ? palette.primary.withOpacity(0.16)
+                        : palette.surface;
+                    final borderColor = isActive
+                        ? palette.primary.withOpacity(0.35)
+                        : palette.border;
 
                     return GestureDetector(
                       onTap: () {
@@ -976,15 +1000,14 @@ class _DiscussionPageState extends State<DiscussionPage> {
                           PageRouteBuilder(
                             transitionDuration: Duration.zero,
                             reverseTransitionDuration: Duration.zero,
-                            pageBuilder:
-                                (_, __, ___) => DiscussionPage(
-                                  titre: subject.titre,
-                                  conversation: Conversation(
-                                    id: subject.id,
-                                    title: subject.titre,
-                                    messages: [],
-                                  ),
-                                ),
+                            pageBuilder: (_, __, ___) => DiscussionPage(
+                              titre: subject.titre,
+                              conversation: Conversation(
+                                id: subject.id,
+                                title: subject.titre,
+                                messages: [],
+                              ),
+                            ),
                           ),
                         );
                       },
@@ -1004,10 +1027,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
                                 color: palette.mutedSurface,
                                 borderRadius: BorderRadius.circular(14),
                               ),
-                              child: Icon(
-                                Icons.forum_outlined,
-                                color: palette.textMuted,
-                              ),
+                              child: Icon(Icons.forum_outlined, color: palette.textMuted),
                             ),
                             const SizedBox(width: 16),
                             Expanded(
@@ -1027,10 +1047,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
                                   const SizedBox(height: 4),
                                   Text(
                                     formattedDate,
-                                    style: TextStyle(
-                                      color: palette.textMuted,
-                                      fontSize: 12,
-                                    ),
+                                    style: TextStyle(color: palette.textMuted, fontSize: 12),
                                   ),
                                 ],
                               ),
@@ -1048,11 +1065,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
                                   color: palette.mutedSurface,
                                   borderRadius: BorderRadius.circular(12),
                                 ),
-                                child: Icon(
-                                  Icons.delete_outline,
-                                  color: palette.textMuted,
-                                  size: 20,
-                                ),
+                                child: Icon(Icons.delete_outline, color: palette.textMuted, size: 20),
                               ),
                             ),
                           ],
@@ -1077,26 +1090,22 @@ class _DiscussionPageState extends State<DiscussionPage> {
                 animation: user,
                 builder: (context, _) {
                   final avatarImage = resolveAvatarImage(user.avatarPath);
-                  final initials =
-                      user.username.isNotEmpty
-                          ? user.username[0].toUpperCase()
-                          : 'U';
+                  final initials = user.username.isNotEmpty ? user.username[0].toUpperCase() : 'U';
                   return Row(
                     children: [
                       CircleAvatar(
                         radius: 20,
                         backgroundColor: palette.background,
                         backgroundImage: avatarImage,
-                        child:
-                            avatarImage == null
-                                ? Text(
-                                  initials,
-                                  style: TextStyle(
-                                    color: palette.textPrimary,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                )
-                                : null,
+                        child: avatarImage == null
+                            ? Text(
+                                initials,
+                                style: TextStyle(
+                                  color: palette.textPrimary,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              )
+                            : null,
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -1106,17 +1115,11 @@ class _DiscussionPageState extends State<DiscussionPage> {
                           children: [
                             Text(
                               user.username,
-                              style: TextStyle(
-                                color: palette.textPrimary,
-                                fontWeight: FontWeight.w600,
-                              ),
+                              style: TextStyle(color: palette.textPrimary, fontWeight: FontWeight.w600),
                             ),
                             Text(
                               'Session active',
-                              style: TextStyle(
-                                color: palette.textMuted,
-                                fontSize: 12,
-                              ),
+                              style: TextStyle(color: palette.textMuted, fontSize: 12),
                             ),
                           ],
                         ),
@@ -1131,17 +1134,10 @@ class _DiscussionPageState extends State<DiscussionPage> {
       ),
     );
   }
-
-  Widget _buildChatSection({
-    required bool isWide,
-    required AppPalette palette,
-  }) {
-    final conversationTitle =
-        widget.conversation?.title.isNotEmpty == true
-            ? widget.conversation!.title
-            : (widget.titre.isNotEmpty
-                ? widget.titre
-                : 'Nouvelle conversation');
+  Widget _buildChatSection({required bool isWide, required AppPalette palette}) {
+    final conversationTitle = widget.conversation?.title.isNotEmpty == true
+        ? widget.conversation!.title
+        : (widget.titre.isNotEmpty ? widget.titre : 'Nouvelle conversation');
 
     return Container(
       color: palette.background,
@@ -1167,10 +1163,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
                   CircleAvatar(
                     radius: 24,
                     backgroundColor: palette.mutedSurface,
-                    child: Icon(
-                      Icons.warning_amber_rounded,
-                      color: palette.warning,
-                    ),
+                    child: Icon(Icons.warning_amber_rounded, color: palette.warning),
                   ),
                 SizedBox(width: isWide ? 20 : 16),
                 Expanded(
@@ -1199,7 +1192,8 @@ class _DiscussionPageState extends State<DiscussionPage> {
                     ],
                   ),
                 ),
-                if (isLoading) _buildStatusChip(palette, 'Réponse en cours...'),
+                if (isLoading)
+                  _buildStatusChip(palette, 'Réponse en cours...'),
                 if (!isWide) const SizedBox(width: 8),
                 _buildHeaderAction(
                   palette,
@@ -1234,29 +1228,21 @@ class _DiscussionPageState extends State<DiscussionPage> {
                 borderRadius: BorderRadius.circular(isWide ? 24 : 18),
                 child: Container(
                   color: palette.background,
-                  child:
-                      widget.conversation == null
-                          ? _buildEmptyState(palette: palette)
-                          : _buildMessagesList(
-                            isWide: isWide,
-                            palette: palette,
-                          ),
+                  child: widget.conversation == null
+                      ? _buildEmptyState(palette: palette)
+                      : _buildMessagesList(isWide: isWide, palette: palette),
                 ),
               ),
             ),
           ),
-          if (files.isNotEmpty)
-            _buildFilesPreview(isWide: isWide, palette: palette),
+          if (files.isNotEmpty) _buildFilesPreview(isWide: isWide, palette: palette),
           _buildInputBar(isWide: isWide, palette: palette),
         ],
       ),
     );
   }
 
-  Widget _buildMessagesList({
-    required bool isWide,
-    required AppPalette palette,
-  }) {
+  Widget _buildMessagesList({required bool isWide, required AppPalette palette}) {
     return ListView.builder(
       controller: _scrollController,
       padding: EdgeInsets.symmetric(
@@ -1296,14 +1282,13 @@ class _DiscussionPageState extends State<DiscussionPage> {
             vertical: isWide ? 18 : 14,
           ),
           decoration: BoxDecoration(
-            gradient:
-                isUser
-                    ? const LinearGradient(
-                      colors: [Color(0xFF2563EB), Color(0xFF0EA5E9)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    )
-                    : null,
+            gradient: isUser
+                ? const LinearGradient(
+                    colors: [Color(0xFF2563EB), Color(0xFF0EA5E9)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  )
+                : null,
             color: isUser ? null : palette.mutedSurface,
             borderRadius: BorderRadius.only(
               topLeft: const Radius.circular(22),
@@ -1311,9 +1296,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
               bottomLeft: Radius.circular(isUser ? 22 : 6),
               bottomRight: Radius.circular(isUser ? 6 : 22),
             ),
-            border: Border.all(
-              color: isUser ? Colors.transparent : palette.border,
-            ),
+            border: Border.all(color: isUser ? Colors.transparent : palette.border),
             boxShadow: [
               if (isUser)
                 const BoxShadow(
@@ -1329,107 +1312,60 @@ class _DiscussionPageState extends State<DiscussionPage> {
                 ),
             ],
           ),
-          child:
-              isLoadingMessage
-                  ? SizedBox(
-                    height: 24,
-                    width: 24,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: palette.primary,
+          child: isLoadingMessage
+              ? SizedBox(
+                  height: 24,
+                  width: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: palette.primary),
+                )
+              : MarkdownBody(
+                  data: messageContent,
+                  selectable: true,
+                  styleSheet: MarkdownStyleSheet(
+                    p: TextStyle(
+                      color: isUser ? palette.accentTextOnPrimary : palette.textPrimary,
+                      fontSize: isWide ? 15 : 14,
+                      height: 1.5,
                     ),
-                  )
-                  : MarkdownBody(
-                    data: messageContent,
-                    selectable: true,
-                    styleSheet: MarkdownStyleSheet(
-                      p: TextStyle(
-                        color:
-                            isUser
-                                ? palette.accentTextOnPrimary
-                                : palette.textPrimary,
-                        fontSize: isWide ? 15 : 14,
-                        height: 1.5,
-                      ),
-                      code: TextStyle(
-                        color: palette.textPrimary,
-                        fontFamily: 'monospace',
-                        fontSize: isWide ? 14 : 13,
-                      ),
-                      blockquote: TextStyle(
-                        color: palette.textSecondary,
-                        fontSize: isWide ? 15 : 14,
-                        fontStyle: FontStyle.italic,
-                      ),
-                      h1: TextStyle(
-                        color: palette.textPrimary,
-                        fontSize: isWide ? 26 : 22,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      h2: TextStyle(
-                        color: palette.textPrimary,
-                        fontSize: isWide ? 24 : 20,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      h3: TextStyle(
-                        color: palette.textPrimary,
-                        fontSize: isWide ? 22 : 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      h4: TextStyle(
-                        color: palette.textPrimary,
-                        fontSize: isWide ? 20 : 17,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      h5: TextStyle(
-                        color: palette.textPrimary,
-                        fontSize: isWide ? 18 : 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      h6: TextStyle(
-                        color: palette.textPrimary,
-                        fontSize: isWide ? 16 : 15,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      a: TextStyle(
-                        color: palette.primary,
-                        decoration: TextDecoration.underline,
-                      ),
-                      strong: TextStyle(
-                        color:
-                            isUser
-                                ? palette.accentTextOnPrimary
-                                : palette.textPrimary,
-                        fontWeight: FontWeight.w700,
-                      ),
-                      em: TextStyle(
-                        color:
-                            isUser
-                                ? palette.accentTextOnPrimary
-                                : palette.textPrimary,
-                        fontStyle: FontStyle.italic,
-                      ),
-                      del: TextStyle(
-                        color: palette.textMuted,
-                        decoration: TextDecoration.lineThrough,
-                      ),
-                      blockquoteDecoration: BoxDecoration(
-                        color: palette.mutedSurface,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: palette.border),
-                      ),
-                      codeblockDecoration: BoxDecoration(
-                        color: palette.mutedSurface,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: palette.border),
-                      ),
-                      listBullet: TextStyle(
-                        color:
-                            isUser
-                                ? palette.accentTextOnPrimary
-                                : palette.textPrimary,
-                        fontSize: isWide ? 15 : 14,
-                      ),
+                    code: TextStyle(
+                      color: palette.textPrimary,
+                      fontFamily: 'monospace',
+                      fontSize: isWide ? 14 : 13,
+                    ),
+                    blockquote: TextStyle(
+                      color: palette.textSecondary,
+                      fontSize: isWide ? 15 : 14,
+                      fontStyle: FontStyle.italic,
+                    ),
+                    h1: TextStyle(color: palette.textPrimary, fontSize: isWide ? 26 : 22, fontWeight: FontWeight.bold),
+                    h2: TextStyle(color: palette.textPrimary, fontSize: isWide ? 24 : 20, fontWeight: FontWeight.bold),
+                    h3: TextStyle(color: palette.textPrimary, fontSize: isWide ? 22 : 18, fontWeight: FontWeight.bold),
+                    h4: TextStyle(color: palette.textPrimary, fontSize: isWide ? 20 : 17, fontWeight: FontWeight.bold),
+                    h5: TextStyle(color: palette.textPrimary, fontSize: isWide ? 18 : 16, fontWeight: FontWeight.bold),
+                    h6: TextStyle(color: palette.textPrimary, fontSize: isWide ? 16 : 15, fontWeight: FontWeight.bold),
+                    a: TextStyle(color: palette.primary, decoration: TextDecoration.underline),
+                    strong: TextStyle(
+                      color: isUser ? palette.accentTextOnPrimary : palette.textPrimary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    em: TextStyle(
+                      color: isUser ? palette.accentTextOnPrimary : palette.textPrimary,
+                      fontStyle: FontStyle.italic,
+                    ),
+                    del: TextStyle(color: palette.textMuted, decoration: TextDecoration.lineThrough),
+                    blockquoteDecoration: BoxDecoration(
+                      color: palette.mutedSurface,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: palette.border),
+                    ),
+                    codeblockDecoration: BoxDecoration(
+                      color: palette.mutedSurface,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: palette.border),
+                    ),
+                    listBullet: TextStyle(
+                      color: isUser ? palette.accentTextOnPrimary : palette.textPrimary,
+                      fontSize: isWide ? 15 : 14,
                     ),
                   ),
         );
@@ -1476,22 +1412,20 @@ class _DiscussionPageState extends State<DiscussionPage> {
 
   Widget _buildUserAvatar(AppPalette palette) {
     final avatarImage = resolveAvatarImage(user.avatarPath);
-    final initials =
-        user.username.isNotEmpty ? user.username[0].toUpperCase() : 'U';
+    final initials = user.username.isNotEmpty ? user.username[0].toUpperCase() : 'U';
     return CircleAvatar(
       radius: 21,
       backgroundColor: palette.primary,
       backgroundImage: avatarImage,
-      child:
-          avatarImage == null
-              ? Text(
-                initials,
-                style: TextStyle(
-                  color: palette.accentTextOnPrimary,
-                  fontWeight: FontWeight.bold,
-                ),
-              )
-              : null,
+      child: avatarImage == null
+          ? Text(
+              initials,
+              style: TextStyle(
+                color: palette.accentTextOnPrimary,
+                fontWeight: FontWeight.bold,
+              ),
+            )
+          : null,
     );
   }
 
@@ -1512,28 +1446,44 @@ class _DiscussionPageState extends State<DiscussionPage> {
           ),
           const SizedBox(height: 24),
           Text(
-            'Comment puis-je vous aider aujourd\'hui ?',
-            style: TextStyle(
-              color: palette.textPrimary,
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-            ),
+            'Comment puis-je vous aider aujourd'hui ?',
+            style: TextStyle(color: palette.textPrimary, fontSize: 20, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 12),
           Text(
-            'Commencez par poser une question ou décrivez le contexte dans lequel vous avez besoin d\'aide.',
+            'Commencez par poser une question ou décrivez le contexte dans lequel vous avez besoin d'aide.',
             textAlign: TextAlign.center,
             style: TextStyle(color: palette.textSecondary, fontSize: 14),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            'Analysez votre e-mail en 3 étapes simples :',
+            style: TextStyle(color: palette.textPrimary, fontSize: 15, fontWeight: FontWeight.w600),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('- Connectez-vous à votre boîte mail.', style: TextStyle(color: palette.textSecondary, fontSize: 14)),
+                const SizedBox(height: 6),
+                Text('- Transférez l\'email à analyser à l\'adresse "plp.chaton@gmail.com".',
+                    style: TextStyle(color: palette.textSecondary, fontSize: 14)),
+                const SizedBox(height: 6),
+                Text('- Consultez le résultat directement dans cette application.',
+                    style: TextStyle(color: palette.textSecondary, fontSize: 14)),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildFilesPreview({
-    required bool isWide,
-    required AppPalette palette,
-  }) {
+  Widget _buildFilesPreview({required bool isWide, required AppPalette palette}) {
     return Container(
       height: 70,
       margin: EdgeInsets.fromLTRB(isWide ? 36 : 16, 18, isWide ? 36 : 16, 0),
@@ -1560,11 +1510,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
                   child: Text(
                     p.basename(file.path),
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: palette.textPrimary,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
+                    style: TextStyle(color: palette.textPrimary, fontSize: 14, fontWeight: FontWeight.w500),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -1658,10 +1604,8 @@ class _DiscussionPageState extends State<DiscussionPage> {
                 child: _buildInputIcon(
                   palette,
                   icon: isListeningMic ? Icons.stop : Icons.mic,
-                  tooltip:
-                      isListeningMic
-                          ? 'Arrêter l\'écoute'
-                          : 'Dicter un message',
+
+                  tooltip: isListeningMic ? 'Arrêter l\'écoute' : 'Dicter un message',
                   onTap: () {
                     if (_speechEnabled && !_isListening) {
                       setState(() {
@@ -1711,10 +1655,7 @@ class _DiscussionPageState extends State<DiscussionPage> {
     String? tooltip,
     bool isActive = false,
   }) {
-    final iconWidget = Icon(
-      icon,
-      color: isActive ? palette.primary : palette.textMuted,
-    );
+    final iconWidget = Icon(icon, color: isActive ? palette.primary : palette.textMuted);
     final content = InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(18),
@@ -1722,14 +1663,9 @@ class _DiscussionPageState extends State<DiscussionPage> {
         width: 42,
         height: 42,
         decoration: BoxDecoration(
-          color:
-              isActive
-                  ? palette.primary.withOpacity(0.18)
-                  : palette.mutedSurface,
+          color: isActive ? palette.primary.withOpacity(0.18) : palette.mutedSurface,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: isActive ? palette.primary : palette.border,
-          ),
+          border: Border.all(color: isActive ? palette.primary : palette.border),
         ),
         child: Center(child: iconWidget),
       ),
@@ -1782,23 +1718,20 @@ class _DiscussionPageState extends State<DiscussionPage> {
           SizedBox(
             width: 14,
             height: 14,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              color: palette.primary,
-            ),
+            child: CircularProgressIndicator(strokeWidth: 2, color: palette.primary),
           ),
           const SizedBox(width: 10),
           Text(
             label,
-            style: TextStyle(
-              color: palette.textSecondary,
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-            ),
+            style: TextStyle(color: palette.textSecondary, fontSize: 13, fontWeight: FontWeight.w600),
           ),
         ],
       ),
     );
+  }
+  String _buildReportFileName(String subject) {
+    final sanitized = subject.replaceAll(RegExp(r'[^a-zA-Z0-9]+'), '-').replaceAll(RegExp(r'-{2,}'), '-');
+    return '${sanitized.toLowerCase()}-rapport.pdf';
   }
 
   String _buildReportFileName(String subject) {

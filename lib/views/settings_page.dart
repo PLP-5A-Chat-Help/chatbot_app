@@ -4,13 +4,17 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../utils/app_palette.dart';
+import '../utils/pdf_saver.dart';
 import '../variables.dart';
 import 'home_page.dart';
 import 'mails_page.dart';
 import 'widgets/primary_navigation.dart';
 
 class SettingsPage extends StatefulWidget {
-  const SettingsPage({super.key});
+  const SettingsPage({super.key, this.onChatRequested, this.onMailsRequested});
+
+  final VoidCallback? onChatRequested;
+  final VoidCallback? onMailsRequested;
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
@@ -18,11 +22,13 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   late final TextEditingController _usernameController;
+  late final Future<String?> _defaultDownloadDirectoryFuture;
 
   @override
   void initState() {
     super.initState();
     _usernameController = TextEditingController(text: user.username);
+    _defaultDownloadDirectoryFuture = resolveDefaultDownloadDirectory();
   }
 
   @override
@@ -125,8 +131,20 @@ class _SettingsPageState extends State<SettingsPage> {
                   PrimaryNavigation(
                     palette: palette,
                     activeIndex: 2,
-                    onChatPressed: () => Navigator.of(context).maybePop(),
-                    onMailsPressed: () => _openMailsFromSettings(context),
+                    onChatPressed: () {
+                      if (widget.onChatRequested != null) {
+                        widget.onChatRequested!();
+                      } else {
+                        Navigator.of(context).maybePop();
+                      }
+                    },
+                    onMailsPressed: () {
+                      if (widget.onMailsRequested != null) {
+                        widget.onMailsRequested!();
+                      } else {
+                        _openMailsFromSettings(context);
+                      }
+                    },
                     onSettingsPressed: null,
                   ),
                   Expanded(child: content),
@@ -140,8 +158,20 @@ class _SettingsPageState extends State<SettingsPage> {
                   palette: palette,
                   activeIndex: 2,
                   isHorizontal: true,
-                  onChatPressed: () => Navigator.of(context).maybePop(),
-                  onMailsPressed: () => _openMailsFromSettings(context),
+                  onChatPressed: () {
+                    if (widget.onChatRequested != null) {
+                      widget.onChatRequested!();
+                    } else {
+                      Navigator.of(context).maybePop();
+                    }
+                  },
+                  onMailsPressed: () {
+                    if (widget.onMailsRequested != null) {
+                      widget.onMailsRequested!();
+                    } else {
+                      _openMailsFromSettings(context);
+                    }
+                  },
                   onSettingsPressed: null,
                 ),
                 Expanded(child: content),
@@ -272,10 +302,33 @@ class _SettingsPageState extends State<SettingsPage> {
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Dossier de téléchargement des rapports'),
-                  subtitle: Text(
-                    downloadDirectory ?? 'Utilisation du dossier par défaut',
-                    style: TextStyle(color: palette.textMuted),
-                  ),
+                  subtitle: downloadDirectory != null
+                      ? Text(
+                          downloadDirectory,
+                          style: TextStyle(color: palette.textMuted),
+                        )
+                      : FutureBuilder<String?>(
+                          future: _defaultDownloadDirectoryFuture,
+                          builder: (context, snapshot) {
+                            if (snapshot.connectionState == ConnectionState.waiting) {
+                              return Text(
+                                'Recherche du dossier par défaut...',
+                                style: TextStyle(color: palette.textMuted),
+                              );
+                            }
+                            final resolved = snapshot.data;
+                            if (resolved == null || resolved.isEmpty) {
+                              return Text(
+                                'Chemin par défaut indisponible',
+                                style: TextStyle(color: palette.textMuted),
+                              );
+                            }
+                            return Text(
+                              resolved,
+                              style: TextStyle(color: palette.textMuted),
+                            );
+                          },
+                        ),
                   trailing: const Icon(Icons.folder_open_outlined),
                   onTap: _pickDownloadDirectory,
                 ),
@@ -302,11 +355,24 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   void _openMailsFromSettings(BuildContext context) {
-    Navigator.of(context).push(
+    final navigator = Navigator.of(context);
+    navigator.push(
       PageRouteBuilder(
         transitionDuration: Duration.zero,
         reverseTransitionDuration: Duration.zero,
-        pageBuilder: (_, __, ___) => const MailsPage(),
+        pageBuilder: (_, __, ___) => MailsPage(
+          onOpenChat: () {
+            navigator.pop();
+            if (widget.onChatRequested != null) {
+              widget.onChatRequested!();
+            } else {
+              navigator.maybePop();
+            }
+          },
+          onOpenSettings: () {
+            navigator.pop();
+          },
+        ),
       ),
     );
   }

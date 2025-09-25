@@ -24,3 +24,14 @@ Future<String?> savePdfBytes(Uint8List bytes, String filename, {String? director
   await file.writeAsBytes(bytes, flush: true);
   return file.path;
 }
+
+Future<String?> getDefaultDownloadDirectory() async {
+  Directory? preferred;
+  try {
+    preferred = await getDownloadsDirectory();
+  } catch (_) {
+    preferred = null;
+  }
+  preferred ??= await getApplicationDocumentsDirectory();
+  return preferred.path;
+}

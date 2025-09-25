@@ -15,3 +15,7 @@ Future<String?> savePdfBytes(Uint8List bytes, String filename, {String? director
   html.Url.revokeObjectUrl(url);
   return null;
 }
+
+Future<String?> getDefaultDownloadDirectory() async {
+  return 'Téléchargements du navigateur';
+}

@@ -35,10 +35,6 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> connexion() async {
-    Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => DiscussionPage.empty()),
-        );
     setState(() {
       messageErreur = "";
     });

@@ -1,6 +1,9 @@
 
 import 'dart:typed_data';
+
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 
 import '../model/mail_analysis.dart';
@@ -8,13 +11,17 @@ import '../utils/app_palette.dart';
 import '../utils/mail_report_generator.dart';
 import '../utils/pdf_saver.dart';
 import '../variables.dart';
+import 'discussion_page.dart';
 import 'settings_page.dart';
 import 'widgets/primary_navigation.dart';
 
 class MailsPage extends StatelessWidget {
-  const MailsPage({super.key, this.onStartConversation});
+  const MailsPage({super.key, this.onStartConversation, this.onOpenChat, this.onOpenSettings});
 
   final void Function(BuildContext context, MailAnalysis mail)? onStartConversation;
+  final VoidCallback? onOpenChat;
+  final VoidCallback? onOpenSettings;
+
   static final List<MailAnalysis> _recentMails = [
     MailAnalysis(
       subject: 'Connexion suspecte détectée',
@@ -77,7 +84,7 @@ class MailsPage extends StatelessWidget {
                   PrimaryNavigation(
                     palette: palette,
                     activeIndex: 1,
-                    onChatPressed: () => Navigator.of(context).maybePop(),
+                    onChatPressed: onOpenChat ?? () => Navigator.of(context).maybePop(),
                     onMailsPressed: null,
                     onSettingsPressed: () => _openSettings(context),
                   ),
@@ -92,7 +99,7 @@ class MailsPage extends StatelessWidget {
                   palette: palette,
                   activeIndex: 1,
                   isHorizontal: true,
-                  onChatPressed: () => Navigator.of(context).maybePop(),
+                  onChatPressed: onOpenChat ?? () => Navigator.of(context).maybePop(),
                   onMailsPressed: null,
                   onSettingsPressed: () => _openSettings(context),
                 ),
@@ -106,11 +113,26 @@ class MailsPage extends StatelessWidget {
   }
 
   void _openSettings(BuildContext context) {
+    if (onOpenSettings != null) {
+      onOpenSettings!();
+      return;
+    }
     Navigator.of(context).push(
       PageRouteBuilder(
         transitionDuration: Duration.zero,
         reverseTransitionDuration: Duration.zero,
-        pageBuilder: (_, __, ___) => const SettingsPage(),
+        pageBuilder: (_, __, ___) => SettingsPage(
+          onChatRequested: () {
+            Navigator.of(context).pushAndRemoveUntil(
+              PageRouteBuilder(
+                transitionDuration: Duration.zero,
+                reverseTransitionDuration: Duration.zero,
+                pageBuilder: (_, __, ___) => DiscussionPage.empty(),
+              ),
+              (route) => route.isFirst,
+            );
+          },
+        ),
       ),
     );
   }
@@ -146,7 +168,7 @@ class MailsPage extends StatelessWidget {
             child: ListView.separated(
               physics: const BouncingScrollPhysics(),
               itemCount: _recentMails.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 18),
+              separatorBuilder: (_, __) => const SizedBox(height: 14),
               itemBuilder: (context, index) {
                 final mail = _recentMails[index];
                 return _MailCard(
@@ -207,90 +229,90 @@ class _MailCard extends StatelessWidget {
         child: Container(
           decoration: BoxDecoration(
             color: palette.surface,
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(22),
             border: Border.all(color: palette.border),
             boxShadow: [
               BoxShadow(
                 color: palette.shadow,
-                blurRadius: 12,
-                offset: const Offset(0, 6),
+                blurRadius: 10,
+                offset: const Offset(0, 5),
               ),
             ],
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-          child: Row(
+          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 18),
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: palette.mutedSurface,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Icon(Icons.mail_outline, color: palette.textMuted),
-              ),
-              const SizedBox(width: 20),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      mail.subject,
-                      style: TextStyle(
-                        color: palette.textPrimary,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                      ),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 46,
+                    height: 46,
+                    decoration: BoxDecoration(
+                      color: palette.mutedSurface,
+                      borderRadius: BorderRadius.circular(16),
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Date d\'analyse : $formattedDate',
-                      style: TextStyle(
-                        color: palette.textSecondary,
-                        fontSize: 14,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Expéditeur : ${mail.sender}',
-                      style: TextStyle(
-                        color: palette.textMuted,
-                        fontSize: 13,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
+                    child: Icon(Icons.mail_outline, color: palette.textMuted),
+                  ),
+                  const SizedBox(width: 18),
+                  Expanded(
+                    child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: Text(
-                            mail.summary,
-                            style: TextStyle(color: palette.textSecondary, fontSize: 14),
+                        Text(
+                          mail.subject,
+                          style: TextStyle(
+                            color: palette.textPrimary,
+                            fontSize: 17,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
-                        if (onStartConversation != null)
-                          Padding(
-                            padding: const EdgeInsets.only(left: 12),
-                            child: FilledButton.icon(
-                              onPressed: onStartConversation,
-                              style: FilledButton.styleFrom(
-                                backgroundColor: palette.primary,
-                                foregroundColor: palette.accentTextOnPrimary,
-                                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                              ),
-                              icon: const Icon(Icons.forum_outlined),
-                              label: const Text('Nouvelle conversation'),
-                            ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Date d\'analyse : $formattedDate',
+                          style: TextStyle(
+                            color: palette.textSecondary,
+                            fontSize: 13,
                           ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Expéditeur : ${mail.sender}',
+                          style: TextStyle(
+                            color: palette.textMuted,
+                            fontSize: 12,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          mail.summary,
+                          style: TextStyle(color: palette.textSecondary, fontSize: 13.5, height: 1.35),
+                        ),
                       ],
                     ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(width: 12),
+                  _ScoreBadge(palette: palette, score: mail.maliciousnessScore),
+                ],
               ),
-              const SizedBox(width: 12),
-              _ScoreBadge(palette: palette, score: mail.maliciousnessScore),
+              if (onStartConversation != null) ...[
+                const SizedBox(height: 16),
+                Align(
+                  alignment: Alignment.bottomRight,
+                  child: FilledButton.icon(
+                    onPressed: onStartConversation,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: palette.primary,
+                      foregroundColor: palette.accentTextOnPrimary,
+                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    icon: const Icon(Icons.forum_outlined),
+                    label: const Text('Nouvelle conversation'),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -345,10 +367,16 @@ class _MailReportDialogState extends State<_MailReportDialog> {
   Uint8List? _pdfBytes;
   bool _loading = true;
   String? _error;
+  late final PdfViewerController _pdfController;
+
+  static const double _minZoom = 1.0;
+  static const double _maxZoom = 3.0;
+  static const double _zoomStep = 0.2;
 
   @override
   void initState() {
     super.initState();
+    _pdfController = PdfViewerController();
     _loadPdf();
   }
 
@@ -462,16 +490,39 @@ class _MailReportDialogState extends State<_MailReportDialog> {
       );
     }
 
-    return SfPdfViewer.memory(
-      _pdfBytes!,
-      canShowPaginationDialog: false,
-      maxZoomLevel: 3,
-      pageLayoutMode: PdfPageLayoutMode.single,
+    return Listener(
+      onPointerSignal: _handlePointerSignal,
+      child: SfPdfViewer.memory(
+        _pdfBytes!,
+        controller: _pdfController,
+        canShowPaginationDialog: false,
+        enableDoubleTapZooming: true,
+        maxZoomLevel: _maxZoom,
+        minZoomLevel: _minZoom,
+        pageLayoutMode: PdfPageLayoutMode.single,
+      ),
     );
   }
 
   String _buildFileName(String subject) {
     final sanitized = subject.replaceAll(RegExp(r'[^a-zA-Z0-9]+'), '-').replaceAll(RegExp(r'-{2,}'), '-');
     return '${sanitized.toLowerCase()}-rapport.pdf';
+  }
+
+  void _handlePointerSignal(PointerSignalEvent event) {
+    if (event is! PointerScrollEvent) return;
+    final pressedKeys = HardwareKeyboard.instance.logicalKeysPressed;
+    final hasModifier = pressedKeys.contains(LogicalKeyboardKey.controlLeft) ||
+        pressedKeys.contains(LogicalKeyboardKey.controlRight) ||
+        pressedKeys.contains(LogicalKeyboardKey.metaLeft) ||
+        pressedKeys.contains(LogicalKeyboardKey.metaRight);
+    if (!hasModifier) return;
+
+    final currentZoom = _pdfController.zoomLevel;
+    final direction = event.scrollDelta.dy;
+    double targetZoom = direction > 0 ? currentZoom - _zoomStep : currentZoom + _zoomStep;
+    targetZoom = targetZoom.clamp(_minZoom, _maxZoom);
+    if ((targetZoom - currentZoom).abs() < 0.01) return;
+    _pdfController.zoomLevel = targetZoom;
   }
 }
